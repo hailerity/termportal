@@ -57,6 +57,8 @@ const DEFAULT_EXITED_SESSION_TTL_MS = 5 * 60 * 1000;
 
 interface ManagedSession {
   session: TerminalSession;
+  /** Position in exit order; set once the session has exited. */
+  exitSequence?: number;
   removalTimer?: ReturnType<typeof setTimeout>;
 }
 
@@ -66,9 +68,10 @@ export class SessionManager {
   /** Creates that passed the limit check but have not registered their session yet. */
   private pendingCreates = 0;
   private shuttingDown = false;
+  private exitCounter = 0;
 
   constructor(options: SessionManagerOptions) {
-    if (!(options.defaultShell in options.shells)) {
+    if (!Object.hasOwn(options.shells, options.defaultShell)) {
       throw new Error(`Default shell "${options.defaultShell}" is not a configured shell.`);
     }
     this.options = options;
@@ -141,9 +144,11 @@ export class SessionManager {
       session.onClientDetached(() =>
         this.emit({ type: 'client.detached', sessionId: session.id, clients: session.clientCount }),
       );
+      const created = session.snapshot();
+      this.emit({ type: 'session.created', session: created });
+      // A process that died during start never reaches the onExit listener registered above.
       if (!session.isLive) this.handleExit(managed);
-      this.emit({ type: 'session.created', session: session.snapshot() });
-      return session.snapshot();
+      return created;
     } finally {
       this.pendingCreates--;
     }
@@ -238,14 +243,17 @@ export class SessionManager {
       this.remove(managed);
       return;
     }
+    managed.exitSequence = this.exitCounter++;
     managed.removalTimer = setTimeout(() => this.remove(managed), ttl);
     managed.removalTimer.unref?.();
     this.evictOldestExited();
   }
 
-  /** Retained exited sessions are capped at `maxSessions` regardless of the TTL. */
+  /** Retained exited sessions are capped at `maxSessions`; the longest-exited go first. */
   private evictOldestExited(): void {
-    const exited = [...this.sessions.values()].filter(({ session }) => !session.isLive);
+    const exited = [...this.sessions.values()]
+      .filter((managed) => managed.exitSequence !== undefined)
+      .sort((a, b) => (a.exitSequence ?? 0) - (b.exitSequence ?? 0));
     const excess = exited.length - this.options.maxSessions;
     for (const managed of exited.slice(0, Math.max(0, excess))) this.remove(managed);
   }

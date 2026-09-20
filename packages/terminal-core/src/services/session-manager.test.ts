@@ -124,6 +124,12 @@ describe('create', () => {
   });
 });
 
+describe('configuration', () => {
+  it('rejects a default shell that is not an own key of the shell map', () => {
+    expect(() => setup({ defaultShell: 'toString' })).toThrow(/not a configured shell/);
+  });
+});
+
 describe('get and list', () => {
   it('returns snapshots in creation order', async () => {
     const { manager } = setup();
@@ -155,6 +161,20 @@ describe('exit policy', () => {
     const { id } = await manager.create();
     ptyFactory.last.emitExit();
     expect(manager.get(id)).toBeUndefined();
+  });
+
+  it('evicts by exit order, so a long-lived session stays visible after it exits', async () => {
+    const { manager, ptyFactory } = setup({ maxSessions: 2 });
+    const oldest = await manager.create();
+    const oldestPty = ptyFactory.last;
+    const exitedIds: string[] = [];
+    for (let i = 0; i < 2; i++) {
+      await manager.create().then((s) => exitedIds.push(s.id));
+      ptyFactory.last.emitExit();
+    }
+    oldestPty.emitExit({ exitCode: 5 });
+    expect(manager.get(oldest.id)).toMatchObject({ status: 'exited', exitCode: 5 });
+    expect(manager.get(exitedIds[0]!)).toBeUndefined();
   });
 
   it('caps retained exited sessions at maxSessions', async () => {

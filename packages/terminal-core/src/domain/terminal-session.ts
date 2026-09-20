@@ -131,10 +131,10 @@ export class TerminalSession {
       });
     }
     this.pty = pty;
-    this.ptySubscriptions = [
-      pty.onData((data) => this.handleOutput(data)),
-      pty.onExit((event) => this.handleExit(event)),
-    ];
+    // Pushed one by one so an exit reported mid-subscription still finds what to dispose.
+    this.ptySubscriptions.push(pty.onData((data) => this.handleOutput(data)));
+    this.ptySubscriptions.push(pty.onExit((event) => this.handleExit(event)));
+    if (!this.isLive) this.disposePtySubscriptions();
     // An adapter may report an exit while we subscribe; never resurrect such a session.
     if (this.currentStatus === 'starting') this.setStatus('running');
   }
@@ -262,8 +262,7 @@ export class TerminalSession {
   private finish(event: PtyExitEvent): void {
     if (this.killTimer) clearTimeout(this.killTimer);
     this.killTimer = undefined;
-    for (const unsubscribe of this.ptySubscriptions) unsubscribe();
-    this.ptySubscriptions = [];
+    this.disposePtySubscriptions();
     this.exit = event;
     this.touch();
     this.setStatus('exited');
@@ -278,6 +277,10 @@ export class TerminalSession {
     this.statusEmitter.clear();
     this.exitEmitter.clear();
     this.clientDetachedEmitter.clear();
+  }
+
+  private disposePtySubscriptions(): void {
+    for (const unsubscribe of this.ptySubscriptions.splice(0)) unsubscribe();
   }
 
   private failTermination(): void {
