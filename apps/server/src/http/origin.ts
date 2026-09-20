@@ -3,18 +3,15 @@
  * CORS (which only hides responses) nor WebSockets (which ignore CORS) stop a hostile web page
  * from *sending* requests to a server its visitor can reach — so the Origin header is enforced
  * server-side. Requests without an Origin come from non-browser clients and are allowed.
+ *
+ * The origin is compared with configuration only, never with the request's Host header: both
+ * are attacker-controlled under DNS rebinding. A same-origin deployment lists its own origin
+ * in ALLOWED_ORIGINS.
  */
 export function isOriginAllowed(
   origin: string | undefined,
-  host: string | undefined,
   allowedOrigins: readonly string[],
 ): boolean {
   if (origin === undefined) return true;
-  if (allowedOrigins.includes('*') || allowedOrigins.includes(origin)) return true;
-  try {
-    // Same-origin: the page was served by this very host.
-    return host !== undefined && new URL(origin).host === host;
-  } catch {
-    return false;
-  }
+  return allowedOrigins.includes('*') || allowedOrigins.includes(origin);
 }

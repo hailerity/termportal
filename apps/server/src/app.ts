@@ -54,7 +54,7 @@ export async function buildApp(options: AppOptions): Promise<FastifyInstance> {
   app.addHook('onRequest', async (request, reply) => {
     reply.header('x-request-id', request.id);
     // CORS alone would still let a foreign page *send* a body-less POST and spawn shells.
-    if (!isOriginAllowed(request.headers.origin, request.headers.host, options.allowedOrigins)) {
+    if (!isOriginAllowed(request.headers.origin, options.allowedOrigins)) {
       throw new HttpError('ORIGIN_NOT_ALLOWED', 'Origin is not allowed.');
     }
   });

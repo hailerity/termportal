@@ -13,7 +13,9 @@ let harness: ReturnType<typeof createFakeSessions>;
 let baseUrl: string;
 const clients: TestTerminalClient[] = [];
 
-async function start(options: { maxProtocolErrors?: number; maxBufferedBytes?: number } = {}) {
+async function start(
+  options: { maxProtocolErrors?: number; maxBufferedBytes?: number; closeGraceMs?: number } = {},
+) {
   harness = createFakeSessions();
   app = await buildApp({ sessions: harness.sessions, allowedOrigins: ['http://localhost:4200'] });
   gateway = createTerminalGateway({
@@ -81,12 +83,21 @@ describe('connection', () => {
     await expect(TestTerminalClient.connect(`${baseUrl}/api/v1/sessions`)).rejects.toThrow(/404/);
   });
 
-  it('rejects foreign browser origins but allows configured and same-origin ones', async () => {
+  it('allows configured browser origins only, never trusting the Host header', async () => {
     const { id } = await harness.sessions.create();
     await expect(connect(id, { origin: 'https://evil.example' })).rejects.toThrow(/403/);
     await expect(connect(id, { origin: 'null' })).rejects.toThrow(/403/);
+    await expect(connect(id, { origin: baseUrl.replace('ws:', 'http:') })).rejects.toThrow(/403/);
     await expect(connect(id, { origin: 'http://localhost:4200' })).resolves.toBeDefined();
-    await expect(connect(id, { origin: baseUrl.replace('ws:', 'http:') })).resolves.toBeDefined();
+  });
+
+  it('survives an oversized frame on a rejected connection', async () => {
+    const client = await connect('term_unknown12345');
+    client.sendRaw('x'.repeat(300 * 1024));
+    await client.closed;
+    const { id } = await harness.sessions.create();
+    const healthy = await connect(id);
+    await healthy.waitFor((m) => m.type === 'status');
   });
 });
 
@@ -141,6 +152,19 @@ describe('messages', () => {
     client.sendRaw('x'.repeat(300 * 1024));
     expect((await client.closed).code).toBe(1009);
     expect(harness.sessions.get(id)?.status).toBe('running');
+  });
+
+  it('contains unexpected PTY errors instead of crashing', async () => {
+    const { id } = await harness.sessions.create();
+    harness.ptyFactory.last.write = () => {
+      throw new Error('EIO /dev/ptmx');
+    };
+    const client = await connect(id);
+    client.send({ type: 'input', data: 'x' });
+    const error = await client.waitFor(isError('INTERNAL_ERROR'));
+    expect(JSON.stringify(error)).not.toContain('ptmx');
+    client.send({ type: 'ping' });
+    await client.waitFor((m) => m.type === 'pong');
   });
 
   it('reports input sent while the session is terminating', async () => {
@@ -216,6 +240,19 @@ describe('lifecycle', () => {
     client.ws.resume();
     expect((await client.closed).code).toBe(CLOSE_CODES.tryAgainLater);
     expect(harness.sessions.get(id)?.status).toBe('running');
+  });
+
+  it('does not wait for a peer that never completes the close handshake', async () => {
+    await gateway.close();
+    await app.close();
+    await start({ closeGraceMs: 50 });
+    const { id } = await harness.sessions.create();
+    const client = await connect(id);
+    await client.waitFor((m) => m.type === 'status');
+    client.ws.pause();
+    const startedAt = Date.now();
+    await gateway.close();
+    expect(Date.now() - startedAt).toBeLessThan(2000);
   });
 
   it('closes open sockets when the gateway shuts down', async () => {

@@ -32,6 +32,8 @@ export interface TerminalGatewayOptions {
   maxBufferedBytes?: number;
   /** Consecutive invalid messages tolerated before the connection is closed. */
   maxProtocolErrors?: number;
+  /** How long `close()` waits for close handshakes before destroying the remaining sockets. */
+  closeGraceMs?: number;
 }
 
 /** Application close codes (4000-4999 are reserved for applications by RFC 6455). */
@@ -70,8 +72,8 @@ export function createTerminalGateway(options: TerminalGatewayOptions): Terminal
     const path = (request.url ?? '').split('?')[0] ?? '';
     const match = TERMINAL_PATH.exec(path);
     if (!match) return refuse(socket, 404, 'Not Found');
-    const { origin, host } = request.headers;
-    if (!isOriginAllowed(origin, host, options.allowedOrigins)) {
+    const { origin } = request.headers;
+    if (!isOriginAllowed(origin, options.allowedOrigins)) {
       logger.warn({ origin }, 'websocket origin rejected');
       return refuse(socket, 403, 'Forbidden');
     }
@@ -86,6 +88,13 @@ export function createTerminalGateway(options: TerminalGatewayOptions): Terminal
   server.on('upgrade', onUpgrade);
 
   function handleConnection(ws: WebSocket, rawId: string): void {
+    // Registered before anything else: ws keeps parsing frames while a rejected socket closes,
+    // and an 'error' event without a listener (oversized or malformed frame) would crash the
+    // process along with every session.
+    ws.on('error', (error) => {
+      logger.warn({ sessionId: rawId.slice(0, 80), err: error.message }, 'websocket error');
+    });
+
     const send = (message: ServerMessage) => ws.send(encodeServerMessage(message));
     const reject = (code: ErrorCode, message: string, closeCode: number) => {
       send({ type: 'error', code, message });
@@ -150,14 +159,14 @@ export function createTerminalGateway(options: TerminalGatewayOptions): Terminal
         else if (message.type === 'resize') attachment.resize(message.cols, message.rows);
         else send({ type: 'pong' });
       } catch (error) {
-        if (!isTerminalError(error)) throw error;
-        send({ type: 'error', code: error.code, message: error.message });
+        if (isTerminalError(error)) {
+          return send({ type: 'error', code: error.code, message: error.message });
+        }
+        // E.g. the PTY runtime throwing on a process that is just going away. One client's
+        // keystroke must never take the server down.
+        logger.warn({ sessionId, err: error }, 'websocket message handling failed');
+        send({ type: 'error', code: 'INTERNAL_ERROR', message: 'Internal server error.' });
       }
-    });
-
-    ws.on('error', (error) => {
-      // Oversized frames and malformed UTF-8 surface here; ws closes the socket by itself.
-      logger.warn({ sessionId, err: error.message }, 'websocket error');
     });
 
     ws.on('close', (code) => {
@@ -188,7 +197,16 @@ export function createTerminalGateway(options: TerminalGatewayOptions): Terminal
       clearInterval(heartbeat);
       server.off('upgrade', onUpgrade);
       for (const ws of wss.clients) ws.close(CLOSE_CODES.goingAway, 'Server is shutting down.');
-      return new Promise((resolve) => wss.close(() => resolve()));
+      // A vanished peer never answers the close handshake; do not let it stall shutdown.
+      const force = setTimeout(() => {
+        for (const ws of wss.clients) ws.terminate();
+      }, options.closeGraceMs ?? 1000);
+      return new Promise((resolve) =>
+        wss.close(() => {
+          clearTimeout(force);
+          resolve();
+        }),
+      );
     },
   };
 }

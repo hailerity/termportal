@@ -224,13 +224,16 @@ describe('cross-cutting', () => {
     expect(harness.ptyFactory.spawned).toHaveLength(0);
   });
 
-  it('accepts same-origin and origin-less requests', async () => {
-    const sameOrigin = await app.inject({
+  it('does not trust the Host header: a rebinding page matches it by construction', async () => {
+    const rebinding = await app.inject({
       method: 'POST',
       url: '/api/v1/sessions',
-      headers: { origin: 'http://termportal.internal', host: 'termportal.internal' },
+      headers: { origin: 'http://evil.example:3000', host: 'evil.example:3000' },
     });
-    expect(sameOrigin.statusCode).toBe(201);
+    expectError(rebinding, 403, 'ORIGIN_NOT_ALLOWED');
+  });
+
+  it('accepts origin-less requests from non-browser clients', async () => {
     expect((await create()).statusCode).toBe(201);
   });
 });
