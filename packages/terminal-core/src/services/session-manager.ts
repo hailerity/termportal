@@ -46,6 +46,8 @@ export interface SessionManagerOptions {
   shellArgs?: string[];
   /** How long an exited session stays listed so clients can observe its final state. */
   exitedSessionTtlMs?: number;
+  /** Replay buffer size per session, in UTF-8 bytes. */
+  outputBufferBytes?: number;
   killTimeoutMs?: number;
   killGraceMs?: number;
   generateId?: () => string;
@@ -120,6 +122,7 @@ export class SessionManager {
         cwd,
         cols,
         rows,
+        ...(o.outputBufferBytes !== undefined ? { outputBufferBytes: o.outputBufferBytes } : {}),
         ...(o.killTimeoutMs !== undefined ? { killTimeoutMs: o.killTimeoutMs } : {}),
         ...(o.killGraceMs !== undefined ? { killGraceMs: o.killGraceMs } : {}),
         ...(o.now ? { now: o.now } : {}),

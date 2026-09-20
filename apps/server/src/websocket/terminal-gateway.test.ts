@@ -207,6 +207,24 @@ describe('lifecycle', () => {
     await again.waitFor((m) => m.type === 'status');
   });
 
+  it('replays recent output to a client that reconnects', async () => {
+    const { id } = await harness.sessions.create();
+    const pty = harness.ptyFactory.last;
+    const first = await connect(id);
+    await first.waitFor((m) => m.type === 'status');
+    pty.emitData('before-disconnect ');
+    await first.waitForOutput(/before-disconnect/);
+    await first.close();
+
+    pty.emitData('while-away ');
+    const second = await connect(id);
+    await second.waitForOutput(/while-away/);
+    pty.emitData('after-reconnect');
+    await second.waitForOutput(/after-reconnect/);
+    expect(second.messages[0]).toEqual({ type: 'status', status: 'running' });
+    expect(second.output).toBe('before-disconnect while-away after-reconnect');
+  });
+
   it('broadcasts to every client and accepts input from each', async () => {
     const { id } = await harness.sessions.create();
     const pty = harness.ptyFactory.last;

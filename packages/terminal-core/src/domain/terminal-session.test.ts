@@ -5,7 +5,12 @@ import { TerminalSession, type TerminalClientEvent } from './terminal-session.js
 
 const spawnOptions = { file: '/bin/bash', args: [], cwd: '/tmp', env: {} };
 
-type Overrides = { now?: () => Date; killTimeoutMs?: number; killGraceMs?: number };
+type Overrides = {
+  now?: () => Date;
+  killTimeoutMs?: number;
+  killGraceMs?: number;
+  outputBufferBytes?: number;
+};
 
 function createSession(overrides: Overrides = {}) {
   return new TerminalSession({
@@ -282,6 +287,62 @@ describe('clients', () => {
     const { session, pty } = startSession();
     pty.emitExit();
     expectCode(() => session.attach(recordingClient()), 'SESSION_ALREADY_EXITED');
+  });
+});
+
+describe('replay', () => {
+  it('replays earlier output to a late client: status, then snapshot, then live', () => {
+    const { session, pty } = startSession();
+    pty.emitData('one ');
+    pty.emitData('two ');
+    const late = recordingClient();
+    session.attach(late);
+    pty.emitData('three');
+    expect(late.events).toEqual([
+      { type: 'status', status: 'running' },
+      { type: 'output', data: 'one two ' },
+      { type: 'output', data: 'three' },
+    ]);
+  });
+
+  it('gives every client the same stream with no gap and no duplicate', () => {
+    const { session, pty } = startSession();
+    const early = recordingClient();
+    session.attach(early);
+    const late: ReturnType<typeof recordingClient>[] = [];
+    for (let i = 0; i < 50; i++) {
+      pty.emitData(`<${i}>`);
+      if (i % 10 === 5) {
+        const client = recordingClient();
+        late.push(client);
+        session.attach(client);
+      }
+    }
+    const stream = (client: ReturnType<typeof recordingClient>) =>
+      client.events.map((e) => (e.type === 'output' ? e.data : '')).join('');
+    expect(late).toHaveLength(5);
+    for (const client of late) expect(stream(client)).toBe(stream(early));
+  });
+
+  it('bounds the replay to the most recent output', () => {
+    const { session, pty } = startSession({ outputBufferBytes: 8 });
+    pty.emitData('0123456789');
+    pty.emitData('abcd');
+    const client = recordingClient();
+    session.attach(client);
+    expect(client.events[1]).toEqual({ type: 'output', data: '6789abcd' });
+  });
+
+  it('sends no replay message when nothing was printed or replay is disabled', () => {
+    const fresh = recordingClient();
+    startSession().session.attach(fresh);
+    expect(fresh.events).toEqual([{ type: 'status', status: 'running' }]);
+
+    const { session, pty } = startSession({ outputBufferBytes: 0 });
+    pty.emitData('x');
+    const client = recordingClient();
+    session.attach(client);
+    expect(client.events).toEqual([{ type: 'status', status: 'running' }]);
   });
 });
 

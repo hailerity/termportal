@@ -59,6 +59,21 @@ describe('server with a real PTY', () => {
     expect(isAlive(pid)).toBe(false);
   });
 
+  it('keeps a command running across a disconnect and replays its output', async () => {
+    const { createSession, connect } = await start();
+    const { id } = await createSession();
+    const first = await connect(id);
+    await first.waitFor((m) => m.type === 'status');
+    first.send({ type: 'input', data: 'sleep 0.4; echo done-$((6*7))\r' });
+    await first.close();
+
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    const second = await connect(id);
+    await second.waitForOutput(/done-42/);
+    const replay = second.messages.find((m) => m.type === 'output');
+    expect(replay && replay.type === 'output' && replay.data).toContain('done-42');
+  });
+
   it('reflects a shell that exits by itself', async () => {
     const { http, createSession, connect } = await start();
     const { id } = await createSession();

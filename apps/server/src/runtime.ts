@@ -50,6 +50,7 @@ export async function startServer(options: StartServerOptions): Promise<RunningS
     defaultRows: config.defaultRows,
     maxSessions: config.maxSessions,
     exitedSessionTtlMs: config.exitedSessionTtlMs,
+    outputBufferBytes: config.outputBufferBytes,
     isDirectory,
     baseEnv: process.env,
     ...(logger ? { onEvent: (event) => logSessionEvent(logger, event) } : {}),

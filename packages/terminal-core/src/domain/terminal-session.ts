@@ -2,6 +2,7 @@ import type { PtyExitEvent, PtyProcess, Unsubscribe } from '../ports/pty.js';
 import { assertValidDimensions } from './dimensions.js';
 import { Emitter } from './emitter.js';
 import { TerminalError } from './errors.js';
+import { BoundedOutputBuffer, type OutputBuffer } from './output-buffer.js';
 
 export type TerminalSessionStatus = 'starting' | 'running' | 'exited' | 'terminating' | 'failed';
 
@@ -43,6 +44,9 @@ export interface TerminalSessionOptions {
   cwd: string;
   cols: number;
   rows: number;
+  /** Size of the replay buffer in UTF-8 bytes; 0 disables replay. Ignored with `outputBuffer`. */
+  outputBufferBytes?: number;
+  outputBuffer?: OutputBuffer;
   /** Delay before an unresponsive PTY is sent SIGKILL during termination. */
   killTimeoutMs?: number;
   /** How long to wait for the exit after SIGKILL before termination is reported as failed. */
@@ -52,6 +56,7 @@ export interface TerminalSessionOptions {
 
 const DEFAULT_KILL_TIMEOUT_MS = 3000;
 const DEFAULT_KILL_GRACE_MS = 2000;
+const DEFAULT_OUTPUT_BUFFER_BYTES = 1024 * 1024;
 
 interface ExitWaiter {
   resolve: () => void;
@@ -78,6 +83,7 @@ export class TerminalSession {
   private exitWaiters: ExitWaiter[] = [];
 
   private readonly clients = new Set<TerminalClient>();
+  private readonly outputBuffer: OutputBuffer;
   private readonly statusEmitter = new Emitter<TerminalSessionStatus>();
   private readonly exitEmitter = new Emitter<PtyExitEvent>();
   private readonly clientDetachedEmitter = new Emitter<TerminalClient>();
@@ -92,6 +98,9 @@ export class TerminalSession {
     this.now = options.now ?? (() => new Date());
     this.killTimeoutMs = options.killTimeoutMs ?? DEFAULT_KILL_TIMEOUT_MS;
     this.killGraceMs = options.killGraceMs ?? DEFAULT_KILL_GRACE_MS;
+    this.outputBuffer =
+      options.outputBuffer ??
+      new BoundedOutputBuffer(options.outputBufferBytes ?? DEFAULT_OUTPUT_BUFFER_BYTES);
     this.createdAt = this.now();
     this.lastActivityAt = this.createdAt;
   }
@@ -156,8 +165,13 @@ export class TerminalSession {
   }
 
   /**
-   * Registers a client: it synchronously receives the current status and from then on every
-   * output, status and exit event. Exited or failed sessions reject new attachments.
+   * Registers a client: it receives the current status, then the buffered recent output, and
+   * from then on every output, status and exit event. Exited or failed sessions reject new
+   * attachments.
+   *
+   * Replay and registration happen in one synchronous step. PTY output is delivered on later
+   * event-loop turns, so nothing can arrive between the snapshot and the live subscription:
+   * a client sees each byte exactly once, in order — never a gap, never a duplicate.
    */
   attach(client: TerminalClient): TerminalAttachment {
     if (!this.isLive) {
@@ -165,6 +179,8 @@ export class TerminalSession {
     }
     // Deliver the status before registering, so a dead transport fails the attach outright.
     client.send({ type: 'status', status: this.currentStatus });
+    const replay = this.outputBuffer.snapshot();
+    if (replay !== '') client.send({ type: 'output', data: replay });
     this.clients.add(client);
     return {
       write: (data) => this.write(data),
@@ -251,6 +267,7 @@ export class TerminalSession {
   private handleOutput(data: string): void {
     if (!this.isLive) return;
     this.touch();
+    this.outputBuffer.append(data);
     this.broadcast({ type: 'output', data });
   }
 
@@ -272,6 +289,8 @@ export class TerminalSession {
       ...(event.signal !== undefined ? { signal: event.signal } : {}),
     });
     for (const client of [...this.clients]) this.dropClient(client);
+    // Exited sessions accept no attachments, so their history can be released right away.
+    this.outputBuffer.clear();
     this.exitEmitter.emit(event);
     for (const waiter of this.exitWaiters.splice(0)) waiter.resolve();
     this.statusEmitter.clear();
