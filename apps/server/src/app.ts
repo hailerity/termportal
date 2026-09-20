@@ -4,6 +4,7 @@ import type { SessionManager } from '@termportal/terminal-core';
 import Fastify, { type FastifyBaseLogger, type FastifyInstance } from 'fastify';
 import { HttpError, mapError } from './http/errors.js';
 import { isOriginAllowed } from './http/origin.js';
+import type { Metrics } from './observability/metrics.js';
 import { registerSessionRoutes } from './http/session-routes.js';
 
 export interface AppOptions {
@@ -12,6 +13,8 @@ export interface AppOptions {
   logger?: FastifyBaseLogger | boolean;
   /** Reported by `/ready`; flips to false once shutdown begins. */
   isReady?: () => boolean;
+  /** When given, `/metrics` serves it in the Prometheus text format. */
+  metrics?: Metrics;
 }
 
 const MAX_BODY_BYTES = 64 * 1024;
@@ -78,6 +81,14 @@ export async function buildApp(options: AppOptions): Promise<FastifyInstance> {
     reply.code(ready ? 200 : 503);
     return { status: ready ? 'ready' : 'shutting_down' };
   });
+
+  const { metrics } = options;
+  if (metrics) {
+    app.get('/metrics', async (_request, reply) => {
+      reply.type('text/plain; version=0.0.4; charset=utf-8');
+      return metrics.render();
+    });
+  }
 
   registerSessionRoutes(app, options.sessions);
   return app;

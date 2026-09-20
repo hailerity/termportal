@@ -8,7 +8,8 @@ import {
 } from '@termportal/terminal-pty';
 import type { FastifyBaseLogger } from 'fastify';
 import { buildApp } from './app.js';
-import type { ServerConfig } from './config/config.js';
+import { CONFIG_VARIABLES, type ServerConfig } from './config/config.js';
+import { Metrics } from './observability/metrics.js';
 import { logSessionEvent } from './observability/session-logger.js';
 import { createTerminalGateway } from './websocket/terminal-gateway.js';
 
@@ -41,6 +42,18 @@ export function maxBufferedBytesFor(outputBufferBytes: number): number {
   return Math.max(MIN, outputBufferBytes * 6 + MIN / 2);
 }
 
+/**
+ * The server's environment minus its own configuration. A shell that inherited `PORT=3000`
+ * would, for example, make every dev server started inside the terminal fight for that port.
+ */
+export function shellBaseEnvironment(
+  env: Readonly<Record<string, string | undefined>>,
+): Record<string, string | undefined> {
+  const base = { ...env };
+  for (const name of CONFIG_VARIABLES) delete base[name];
+  return base;
+}
+
 /** Composition root: wires configuration, the real PTY runtime, REST and WebSocket together. */
 export async function startServer(options: StartServerOptions): Promise<RunningServer> {
   const { config, logger } = options;
@@ -52,6 +65,7 @@ export async function startServer(options: StartServerOptions): Promise<RunningS
     throw new Error(`DEFAULT_CWD "${config.defaultCwd}" is not a directory.`);
   }
 
+  const metrics = new Metrics();
   const sessions = new SessionManager({
     ptyFactory: options.ptyFactory ?? new NodePtyFactory(),
     shells: shells as Record<string, string>,
@@ -63,8 +77,12 @@ export async function startServer(options: StartServerOptions): Promise<RunningS
     exitedSessionTtlMs: config.exitedSessionTtlMs,
     outputBufferBytes: config.outputBufferBytes,
     isDirectory,
-    baseEnv: process.env,
-    ...(logger ? { onEvent: (event) => logSessionEvent(logger, event) } : {}),
+    maxClientsPerSession: config.maxClientsPerSession,
+    baseEnv: shellBaseEnvironment(process.env),
+    onEvent: (event) => {
+      metrics.onSessionEvent(event);
+      if (logger) logSessionEvent(logger, event);
+    },
   });
 
   let stopping: Promise<string[]> | undefined;
@@ -73,12 +91,14 @@ export async function startServer(options: StartServerOptions): Promise<RunningS
     allowedOrigins: config.allowedOrigins,
     ...(logger ? { logger } : {}),
     isReady: () => stopping === undefined,
+    metrics,
   });
   const gateway = createTerminalGateway({
     server: app.server,
     sessions,
     allowedOrigins: config.allowedOrigins,
     maxBufferedBytes: maxBufferedBytesFor(config.outputBufferBytes),
+    metrics,
     ...(logger ? { logger } : {}),
   });
 

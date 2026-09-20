@@ -99,6 +99,28 @@ describe('server with a real PTY', () => {
     await Promise.all([b.waitForOutput(/35 110/), c.waitForOutput(/35 110/)]);
   });
 
+  it('keeps its own configuration out of the shell and reports metrics', async () => {
+    process.env.MAX_SESSIONS = '7';
+    try {
+      const { http, createSession, connect } = await start();
+      const { id } = await createSession();
+      const client = await connect(id);
+      await client.waitFor((m) => m.type === 'status');
+      client.send({
+        type: 'input',
+        data: 'echo "cfg=[${MAX_SESSIONS:-unset}] path=${PATH:+set}"\r',
+      });
+      await client.waitForOutput(/cfg=\[unset\] path=set/);
+
+      const metrics = await (await fetch(`${http}/metrics`)).text();
+      expect(metrics).toContain('termportal_active_sessions 1\n');
+      expect(metrics).toContain('termportal_websocket_connections 1\n');
+      expect(metrics).toContain('# TYPE termportal_session_created_total counter');
+    } finally {
+      delete process.env.MAX_SESSIONS;
+    }
+  });
+
   it('reflects a shell that exits by itself', async () => {
     const { http, createSession, connect } = await start();
     const { id } = await createSession();

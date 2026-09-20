@@ -15,6 +15,7 @@ import {
 } from '@termportal/terminal-protocol';
 import { WebSocket, WebSocketServer, type RawData } from 'ws';
 import { isOriginAllowed } from '../http/origin.js';
+import type { Metrics } from '../observability/metrics.js';
 
 interface Logger {
   info(fields: object, message: string): void;
@@ -27,6 +28,7 @@ export interface TerminalGatewayOptions {
   /** Browser origins allowed to open terminal sockets, besides the server's own origin. */
   allowedOrigins: string[];
   logger?: Logger;
+  metrics?: Pick<Metrics, 'websocketOpened' | 'websocketClosed' | 'protocolError'>;
   heartbeatIntervalMs?: number;
   /** A client that lets this many bytes queue up is disconnected instead of buffered forever. */
   maxBufferedBytes?: number;
@@ -130,11 +132,15 @@ export function createTerminalGateway(options: TerminalGatewayOptions): Terminal
       if (isTerminalError(error) && error.code === 'SESSION_ALREADY_EXITED') {
         return reject(error.code, error.message, CLOSE_CODES.sessionExited);
       }
+      if (isTerminalError(error) && error.code === 'CLIENT_LIMIT_REACHED') {
+        return reject(error.code, error.message, CLOSE_CODES.tryAgainLater);
+      }
       logger.warn({ sessionId, err: error }, 'websocket attach failed');
       return ws.close(1011, 'Attach failed.');
     }
 
     logger.info({ sessionId }, 'websocket connected');
+    options.metrics?.websocketOpened();
     alive.add(ws);
     ws.on('pong', () => alive.add(ws));
 
@@ -142,6 +148,7 @@ export function createTerminalGateway(options: TerminalGatewayOptions): Terminal
     const protocolError = (code: ErrorCode, message: string) => {
       // Never log the payload: terminal input may contain secrets.
       logger.warn({ sessionId, code }, 'websocket protocol error');
+      options.metrics?.protocolError();
       send({ type: 'error', code, message });
       if (++protocolErrors >= maxProtocolErrors) {
         ws.close(CLOSE_CODES.policyViolation, 'Too many invalid messages.');
@@ -172,6 +179,7 @@ export function createTerminalGateway(options: TerminalGatewayOptions): Terminal
     ws.on('close', (code) => {
       // Detaching never terminates the session (design §12).
       attachment.detach();
+      options.metrics?.websocketClosed();
       logger.info({ sessionId, code }, 'websocket disconnected');
     });
   }

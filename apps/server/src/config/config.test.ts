@@ -13,6 +13,7 @@ describe('loadConfig', () => {
       outputBufferBytes: 5242880,
       shutdownTimeoutMs: 10000,
       maxSessions: 100,
+      maxClientsPerSession: 32,
       exitedSessionTtlMs: 300000,
       allowedOrigins: ['http://localhost:4200', 'http://127.0.0.1:4200'],
       logLevel: 'info',

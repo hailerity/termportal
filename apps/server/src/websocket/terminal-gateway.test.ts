@@ -23,6 +23,7 @@ async function start(
 ) {
   harness = createFakeSessions({
     outputBufferBytes: REPLAY_BYTES,
+    maxClientsPerSession: 2,
     onEvent: (event) => {
       if (event.type === 'client.attached') onAttached?.();
     },
@@ -80,6 +81,15 @@ describe('connection', () => {
     const client = await connect('nope');
     expect(await client.closed).toMatchObject({ code: CLOSE_CODES.invalidSessionId });
     expect(client.messages[0]).toMatchObject({ type: 'error', code: 'INVALID_SESSION_ID' });
+  });
+
+  it('refuses clients beyond the per-session limit', async () => {
+    const { id } = await harness.sessions.create();
+    const accepted = await Promise.all([connect(id), connect(id)]);
+    await Promise.all(accepted.map((c) => c.waitFor((m) => m.type === 'status')));
+    const refused = await connect(id);
+    expect(await refused.closed).toMatchObject({ code: CLOSE_CODES.tryAgainLater });
+    expect(refused.messages[0]).toMatchObject({ type: 'error', code: 'CLIENT_LIMIT_REACHED' });
   });
 
   it('refuses to attach to an exited session', async () => {

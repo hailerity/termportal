@@ -46,6 +46,8 @@ export interface SessionManagerOptions {
   shellArgs?: string[];
   /** How long an exited session stays listed so clients can observe its final state. */
   exitedSessionTtlMs?: number;
+  /** Maximum number of clients attached to one session. */
+  maxClientsPerSession?: number;
   /** Replay buffer size per session, in UTF-8 bytes. */
   outputBufferBytes?: number;
   killTimeoutMs?: number;
@@ -123,6 +125,7 @@ export class SessionManager {
         cols,
         rows,
         ...(o.outputBufferBytes !== undefined ? { outputBufferBytes: o.outputBufferBytes } : {}),
+        ...(o.maxClientsPerSession !== undefined ? { maxClients: o.maxClientsPerSession } : {}),
         ...(o.killTimeoutMs !== undefined ? { killTimeoutMs: o.killTimeoutMs } : {}),
         ...(o.killGraceMs !== undefined ? { killGraceMs: o.killGraceMs } : {}),
         ...(o.now ? { now: o.now } : {}),

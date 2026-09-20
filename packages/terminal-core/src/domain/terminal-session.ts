@@ -47,6 +47,8 @@ export interface TerminalSessionOptions {
   /** Size of the replay buffer in UTF-8 bytes; 0 disables replay. Ignored with `outputBuffer`. */
   outputBufferBytes?: number;
   outputBuffer?: OutputBuffer;
+  /** Maximum number of simultaneously attached clients. */
+  maxClients?: number;
   /** Delay before an unresponsive PTY is sent SIGKILL during termination. */
   killTimeoutMs?: number;
   /** How long to wait for the exit after SIGKILL before termination is reported as failed. */
@@ -57,6 +59,7 @@ export interface TerminalSessionOptions {
 const DEFAULT_KILL_TIMEOUT_MS = 3000;
 const DEFAULT_KILL_GRACE_MS = 2000;
 const DEFAULT_OUTPUT_BUFFER_BYTES = 1024 * 1024;
+const DEFAULT_MAX_CLIENTS = 32;
 
 interface ExitWaiter {
   resolve: () => void;
@@ -78,6 +81,7 @@ export class TerminalSession {
   private readonly now: () => Date;
   private readonly killTimeoutMs: number;
   private readonly killGraceMs: number;
+  private readonly maxClients: number;
   private killTimer: ReturnType<typeof setTimeout> | undefined;
   private ptySubscriptions: Unsubscribe[] = [];
   private exitWaiters: ExitWaiter[] = [];
@@ -98,6 +102,7 @@ export class TerminalSession {
     this.now = options.now ?? (() => new Date());
     this.killTimeoutMs = options.killTimeoutMs ?? DEFAULT_KILL_TIMEOUT_MS;
     this.killGraceMs = options.killGraceMs ?? DEFAULT_KILL_GRACE_MS;
+    this.maxClients = options.maxClients ?? DEFAULT_MAX_CLIENTS;
     this.outputBuffer =
       options.outputBuffer ??
       new BoundedOutputBuffer(options.outputBufferBytes ?? DEFAULT_OUTPUT_BUFFER_BYTES);
@@ -176,6 +181,9 @@ export class TerminalSession {
   attach(client: TerminalClient): TerminalAttachment {
     if (!this.isLive) {
       throw new TerminalError('SESSION_ALREADY_EXITED', 'Terminal session has already exited.');
+    }
+    if (this.clients.size >= this.maxClients) {
+      throw new TerminalError('CLIENT_LIMIT_REACHED', 'Too many clients are attached.');
     }
     // Deliver the status before registering, so a dead transport fails the attach outright.
     client.send({ type: 'status', status: this.currentStatus });

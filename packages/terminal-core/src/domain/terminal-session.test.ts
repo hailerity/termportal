@@ -10,6 +10,7 @@ type Overrides = {
   killTimeoutMs?: number;
   killGraceMs?: number;
   outputBufferBytes?: number;
+  maxClients?: number;
 };
 
 function createSession(overrides: Overrides = {}) {
@@ -281,6 +282,15 @@ describe('clients', () => {
     expect(departed).toEqual([detaching, failing]);
     pty.emitExit();
     expect(departed).toEqual([detaching, failing, staying]);
+  });
+
+  it('caps the number of attached clients and frees slots on detach', () => {
+    const { session } = startSession({ maxClients: 2 });
+    const first = session.attach(recordingClient());
+    session.attach(recordingClient());
+    expectCode(() => session.attach(recordingClient()), 'CLIENT_LIMIT_REACHED');
+    first.detach();
+    expect(() => session.attach(recordingClient())).not.toThrow();
   });
 
   it('rejects attaching to an exited session', () => {

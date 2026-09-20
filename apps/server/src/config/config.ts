@@ -19,6 +19,7 @@ const envSchema = z.object({
   OUTPUT_BUFFER_BYTES: integer(0, 16 * 1024 * 1024).default(5 * 1024 * 1024),
   SHUTDOWN_TIMEOUT_MS: integer(0, 600_000).default(10_000),
   MAX_SESSIONS: integer(1, 10_000).default(100),
+  MAX_CLIENTS_PER_SESSION: integer(1, 1000).default(32),
   EXITED_SESSION_TTL_MS: integer(0, 86_400_000).default(5 * 60 * 1000),
   /** Browser origins allowed to call the API and open terminal WebSockets. */
   ALLOWED_ORIGINS: list.default(['http://localhost:4200', 'http://127.0.0.1:4200']),
@@ -35,10 +36,14 @@ export interface ServerConfig {
   outputBufferBytes: number;
   shutdownTimeoutMs: number;
   maxSessions: number;
+  maxClientsPerSession: number;
   exitedSessionTtlMs: number;
   allowedOrigins: string[];
   logLevel: z.infer<typeof envSchema>['LOG_LEVEL'];
 }
+
+/** Names of the variables this server is configured with; kept out of spawned shells. */
+export const CONFIG_VARIABLES: readonly string[] = Object.keys(envSchema.shape);
 
 /** Reads the configuration from environment variables (design §24). Throws on invalid values. */
 export function loadConfig(env: Record<string, string | undefined> = process.env): ServerConfig {
@@ -62,6 +67,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     outputBufferBytes: e.OUTPUT_BUFFER_BYTES,
     shutdownTimeoutMs: e.SHUTDOWN_TIMEOUT_MS,
     maxSessions: e.MAX_SESSIONS,
+    maxClientsPerSession: e.MAX_CLIENTS_PER_SESSION,
     exitedSessionTtlMs: e.EXITED_SESSION_TTL_MS,
     allowedOrigins: e.ALLOWED_ORIGINS,
     logLevel: e.LOG_LEVEL,
