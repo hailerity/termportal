@@ -1,0 +1,8 @@
+dist
+out-tsc
+.nx
+coverage
+package-lock.json
+docs
+test-results
+playwright-report

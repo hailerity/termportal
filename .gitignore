@@ -1,0 +1,9 @@
+node_modules
+dist
+out-tsc
+.nx
+coverage
+*.tsbuildinfo
+.DS_Store
+test-results
+playwright-report

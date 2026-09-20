@@ -1,0 +1,31 @@
+{
+  "name": "@termportal/server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "nx": {
+    "name": "server"
+  },
+  "scripts": {
+    "build": "tsc -b tsconfig.app.json",
+    "typecheck": "tsc -b tsconfig.json",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "serve": "tsx watch --conditions=@termportal/source src/main.ts",
+    "start": "node dist/main.js"
+  },
+  "dependencies": {
+    "@fastify/cors": "^11.3.0",
+    "@termportal/api-contract": "*",
+    "@termportal/terminal-core": "*",
+    "@termportal/terminal-protocol": "*",
+    "@termportal/terminal-pty": "*",
+    "fastify": "^5.12.5",
+    "ws": "^8.21.3",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.18.1",
+    "tsx": "^4.23.15"
+  }
+}

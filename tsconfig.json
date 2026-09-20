@@ -1,0 +1,11 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./packages/api-contract" },
+    { "path": "./packages/terminal-protocol" },
+    { "path": "./packages/terminal-core" },
+    { "path": "./packages/terminal-pty" },
+    { "path": "./apps/server" },
+    { "path": "./apps/web" }
+  ]
+}
