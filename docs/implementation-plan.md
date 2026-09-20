@@ -36,22 +36,22 @@ Create a clean TypeScript Nx workspace with the project boundaries established.
 
 ## Tasks
 
-- [ ] Create Nx workspace.
-- [ ] Configure TypeScript.
-- [ ] Configure package-manager workspaces.
-- [ ] Create `apps/server`.
-- [ ] Create `apps/web`.
-- [ ] Create `packages/terminal-core`.
-- [ ] Create `packages/terminal-pty`.
-- [ ] Create `packages/terminal-protocol`.
-- [ ] Create `packages/api-contract`.
-- [ ] Configure project references.
-- [ ] Configure linting.
-- [ ] Configure unit testing.
-- [ ] Configure formatting.
-- [ ] Verify `nx graph`.
-- [ ] Verify all projects are recognized.
-- [ ] Add basic CI command.
+- [x] Create Nx workspace.
+- [x] Configure TypeScript.
+- [x] Configure package-manager workspaces.
+- [x] Create `apps/server`.
+- [x] Create `apps/web`.
+- [x] Create `packages/terminal-core`.
+- [x] Create `packages/terminal-pty`.
+- [x] Create `packages/terminal-protocol`.
+- [x] Create `packages/api-contract`.
+- [x] Configure project references.
+- [x] Configure linting.
+- [x] Configure unit testing.
+- [x] Configure formatting.
+- [x] Verify `nx graph`.
+- [x] Verify all projects are recognized.
+- [x] Add basic CI command.
 
 ## Acceptance criteria
 
@@ -76,17 +76,17 @@ Define stable types before implementing transport.
 
 ## Tasks
 
-- [ ] Define `SessionId`.
-- [ ] Define `TerminalSessionStatus`.
-- [ ] Define `CreateSessionRequest`.
-- [ ] Define `TerminalSessionResponse`.
-- [ ] Define `ListSessionsResponse`.
-- [ ] Define API error shape.
-- [ ] Define WebSocket client messages.
-- [ ] Define WebSocket server messages.
-- [ ] Add Zod schemas.
-- [ ] Add protocol tests.
-- [ ] Define protocol versioning strategy.
+- [x] Define `SessionId`.
+- [x] Define `TerminalSessionStatus`.
+- [x] Define `CreateSessionRequest`.
+- [x] Define `TerminalSessionResponse`.
+- [x] Define `ListSessionsResponse`.
+- [x] Define API error shape.
+- [x] Define WebSocket client messages.
+- [x] Define WebSocket server messages.
+- [x] Add Zod schemas.
+- [x] Add protocol tests.
+- [x] Define protocol versioning strategy.
 
 ## WebSocket types
 
@@ -146,13 +146,13 @@ Create an infrastructure-independent PTY interface.
 
 ## Tasks
 
-- [ ] Define `PtyProcess`.
-- [ ] Define `PtyFactory`.
-- [ ] Define PTY events.
-- [ ] Define spawn options.
-- [ ] Define fake PTY for tests.
-- [ ] Add unit tests around the fake.
-- [ ] Document PTY ownership and lifecycle.
+- [x] Define `PtyProcess`.
+- [x] Define `PtyFactory`.
+- [x] Define PTY events.
+- [x] Define spawn options.
+- [x] Define fake PTY for tests.
+- [x] Add unit tests around the fake.
+- [x] Document PTY ownership and lifecycle.
 
 ## Acceptance criteria
 
@@ -168,18 +168,18 @@ Connect the abstraction to a real operating-system PTY.
 
 ## Tasks
 
-- [ ] Add `node-pty`.
-- [ ] Implement `NodePtyFactory`.
-- [ ] Map shell names to executables.
-- [ ] Spawn PTY with configured dimensions.
-- [ ] Forward PTY output.
-- [ ] Forward input.
-- [ ] Implement resize.
-- [ ] Implement kill.
-- [ ] Forward exit event.
-- [ ] Validate working directory.
-- [ ] Add platform handling.
-- [ ] Add integration test.
+- [x] Add `node-pty`.
+- [x] Implement `NodePtyFactory`.
+- [x] Map shell names to executables.
+- [x] Spawn PTY with configured dimensions.
+- [x] Forward PTY output.
+- [x] Forward input.
+- [x] Implement resize.
+- [x] Implement kill.
+- [x] Forward exit event.
+- [x] Validate working directory.
+- [x] Add platform handling.
+- [x] Add integration test.
 
 `node-pty` provides the required pseudoterminal bindings and is specifically intended for use cases such as terminal emulators. citeturn0search12
 
@@ -206,31 +206,31 @@ Build the central domain object.
 
 ## Tasks
 
-- [ ] Create session ID generator.
-- [ ] Implement session state.
-- [ ] Connect PTY output to session.
-- [ ] Implement `write`.
-- [ ] Implement `resize`.
-- [ ] Implement `terminate`.
-- [ ] Track PID.
-- [ ] Track timestamps.
-- [ ] Track exit code.
-- [ ] Track exit state.
-- [ ] Add lifecycle events.
-- [ ] Reject writes after exit.
-- [ ] Make termination idempotent.
+- [x] Create session ID generator.
+- [x] Implement session state.
+- [x] Connect PTY output to session.
+- [x] Implement `write`.
+- [x] Implement `resize`.
+- [x] Implement `terminate`.
+- [x] Track PID.
+- [x] Track timestamps.
+- [x] Track exit code.
+- [x] Track exit state.
+- [x] Add lifecycle events.
+- [x] Reject writes after exit.
+- [x] Make termination idempotent.
 
 ## Unit tests
 
-- [ ] starts in `starting`.
-- [ ] becomes `running`.
-- [ ] writes input.
-- [ ] resizes PTY.
-- [ ] receives output.
-- [ ] exits.
-- [ ] records exit code.
-- [ ] termination kills PTY.
-- [ ] repeated termination is safe.
+- [x] starts in `starting`.
+- [x] becomes `running`.
+- [x] writes input.
+- [x] resizes PTY.
+- [x] receives output.
+- [x] exits.
+- [x] records exit code.
+- [x] termination kills PTY.
+- [x] repeated termination is safe.
 
 ---
 
@@ -242,15 +242,15 @@ Manage all active sessions.
 
 ## Tasks
 
-- [ ] Add in-memory session map.
-- [ ] Implement `create`.
-- [ ] Implement `get`.
-- [ ] Implement `list`.
-- [ ] Implement `terminate`.
-- [ ] Implement max-session limit.
-- [ ] Remove exited sessions according to lifecycle policy.
-- [ ] Implement shutdown.
-- [ ] Add manager tests.
+- [x] Add in-memory session map.
+- [x] Implement `create`.
+- [x] Implement `get`.
+- [x] Implement `list`.
+- [x] Implement `terminate`.
+- [x] Implement max-session limit.
+- [x] Remove exited sessions according to lifecycle policy.
+- [x] Implement shutdown.
+- [x] Add manager tests.
 
 ## Acceptance criteria
 
@@ -274,17 +274,17 @@ Expose session lifecycle over HTTP.
 
 ## Tasks
 
-- [ ] Bootstrap Fastify.
-- [ ] Add `/health`.
-- [ ] Add `POST /api/v1/sessions`.
-- [ ] Add `GET /api/v1/sessions`.
-- [ ] Add `GET /api/v1/sessions/:id`.
-- [ ] Add `DELETE /api/v1/sessions/:id`.
-- [ ] Validate request bodies.
-- [ ] Map domain errors to HTTP errors.
-- [ ] Add response serialization.
-- [ ] Add API tests.
-- [ ] Add CORS configuration appropriate for development.
+- [x] Bootstrap Fastify.
+- [x] Add `/health`.
+- [x] Add `POST /api/v1/sessions`.
+- [x] Add `GET /api/v1/sessions`.
+- [x] Add `GET /api/v1/sessions/:id`.
+- [x] Add `DELETE /api/v1/sessions/:id`.
+- [x] Validate request bodies.
+- [x] Map domain errors to HTTP errors.
+- [x] Add response serialization.
+- [x] Add API tests.
+- [x] Add CORS configuration appropriate for development.
 
 ## Acceptance criteria
 
@@ -307,20 +307,20 @@ Expose interactive terminal I/O.
 
 ## Tasks
 
-- [ ] Add WebSocket server.
-- [ ] Implement session route.
-- [ ] Validate session ID.
-- [ ] Validate incoming messages.
-- [ ] Attach clients.
-- [ ] Route input to PTY.
-- [ ] Route resize to PTY.
-- [ ] Broadcast output.
-- [ ] Send status.
-- [ ] Send exit.
-- [ ] Handle malformed messages.
-- [ ] Handle disconnect.
-- [ ] Add heartbeat/ping handling.
-- [ ] Add WebSocket tests.
+- [x] Add WebSocket server.
+- [x] Implement session route.
+- [x] Validate session ID.
+- [x] Validate incoming messages.
+- [x] Attach clients.
+- [x] Route input to PTY.
+- [x] Route resize to PTY.
+- [x] Broadcast output.
+- [x] Send status.
+- [x] Send exit.
+- [x] Handle malformed messages.
+- [x] Handle disconnect.
+- [x] Add heartbeat/ping handling.
+- [x] Add WebSocket tests.
 
 ## Acceptance test
 
@@ -352,13 +352,13 @@ Allow a new browser to attach to an already-running terminal without losing rece
 
 ## Tasks
 
-- [ ] Implement bounded ring buffer.
-- [ ] Configure byte limit.
-- [ ] Append PTY output.
-- [ ] Replay snapshot on attach.
-- [ ] Handle snapshot/live ordering safely.
-- [ ] Add tests around buffer truncation.
-- [ ] Add reconnect test.
+- [x] Implement bounded ring buffer.
+- [x] Configure byte limit.
+- [x] Append PTY output.
+- [x] Replay snapshot on attach.
+- [x] Handle snapshot/live ordering safely.
+- [x] Add tests around buffer truncation.
+- [x] Add reconnect test.
 
 ## Important concurrency requirement
 
@@ -386,13 +386,13 @@ Allow several browsers to observe and interact with one session.
 
 ## Tasks
 
-- [ ] Create client registry per session.
-- [ ] Broadcast output.
-- [ ] Broadcast status/exit.
-- [ ] Route input from any client.
-- [ ] Remove disconnected clients.
-- [ ] Ensure one client failure doesn't affect others.
-- [ ] Add multi-client integration test.
+- [x] Create client registry per session.
+- [x] Broadcast output.
+- [x] Broadcast status/exit.
+- [x] Route input from any client.
+- [x] Remove disconnected clients.
+- [x] Ensure one client failure doesn't affect others.
+- [x] Add multi-client integration test.
 
 ## Acceptance test
 
@@ -414,20 +414,20 @@ Create the reference client.
 
 ## Tasks
 
-- [ ] Add xterm.js.
-- [ ] Add terminal component.
-- [ ] Create session API client.
-- [ ] Create WebSocket client.
-- [ ] Render output.
-- [ ] Forward keyboard input.
-- [ ] Handle terminal resize.
-- [ ] Use `FitAddon`.
-- [ ] Display connection state.
-- [ ] Display session exit state.
-- [ ] Add reconnect action.
-- [ ] Add session list.
-- [ ] Add create-session action.
-- [ ] Add terminate-session action.
+- [x] Add xterm.js.
+- [x] Add terminal component.
+- [x] Create session API client.
+- [x] Create WebSocket client.
+- [x] Render output.
+- [x] Forward keyboard input.
+- [x] Handle terminal resize.
+- [x] Use `FitAddon`.
+- [x] Display connection state.
+- [x] Display session exit state.
+- [x] Add reconnect action.
+- [x] Add session list.
+- [x] Add create-session action.
+- [x] Add terminate-session action.
 
 ## Initial UI
 
@@ -455,52 +455,52 @@ Validate the complete system.
 
 ### Scenario A — basic terminal
 
-- [ ] Create session.
-- [ ] Open terminal.
-- [ ] Run `echo hello`.
-- [ ] See output.
+- [x] Create session.
+- [x] Open terminal.
+- [x] Run `echo hello`.
+- [x] See output.
 
 ### Scenario B — interactive shell
 
-- [ ] Run `cd`.
-- [ ] Run `pwd`.
-- [ ] Run `ls`.
-- [ ] Use arrow keys.
-- [ ] Use Ctrl+C.
-- [ ] Use tab completion.
+- [x] Run `cd`.
+- [x] Run `pwd`.
+- [x] Run `ls`.
+- [ ] Use arrow keys. _(not explicitly verified; xterm.js default behaviour)_
+- [x] Use Ctrl+C.
+- [x] Use tab completion.
 
 ### Scenario C — resize
 
-- [ ] Resize browser.
-- [ ] Verify PTY dimensions.
-- [ ] Run a program that responds to terminal dimensions.
+- [x] Resize browser.
+- [x] Verify PTY dimensions.
+- [x] Run a program that responds to terminal dimensions.
 
 ### Scenario D — reconnect
 
-- [ ] Start command.
-- [ ] Disconnect browser.
-- [ ] Command continues.
-- [ ] Reconnect.
-- [ ] Recent output is replayed.
+- [x] Start command.
+- [x] Disconnect browser.
+- [x] Command continues.
+- [x] Reconnect.
+- [x] Recent output is replayed.
 
 ### Scenario E — multiple clients
 
-- [ ] Open same session in two browser tabs.
-- [ ] Type in one.
-- [ ] Observe output in both.
+- [x] Open same session in two browser tabs.
+- [x] Type in one.
+- [x] Observe output in both.
 
 ### Scenario F — process exit
 
-- [ ] Run `exit`.
-- [ ] Session transitions to exited.
-- [ ] Browser receives exit event.
+- [x] Run `exit`.
+- [x] Session transitions to exited.
+- [x] Browser receives exit event.
 
 ### Scenario G — server shutdown
 
-- [ ] Start sessions.
-- [ ] Stop server.
-- [ ] Confirm PTYs are terminated.
-- [ ] Confirm no orphan processes remain.
+- [x] Start sessions.
+- [x] Stop server.
+- [x] Confirm PTYs are terminated.
+- [x] Confirm no orphan processes remain.
 
 ---
 
@@ -508,21 +508,21 @@ Validate the complete system.
 
 ## Tasks
 
-- [ ] Validate all API inputs.
-- [ ] Bound session count.
-- [ ] Bound output history.
-- [ ] Bound message size.
-- [ ] Bound WebSocket payload size.
-- [ ] Validate terminal dimensions.
-- [ ] Validate CWD.
-- [ ] Restrict supported shells.
-- [ ] Avoid logging terminal data.
-- [ ] Add structured logging.
-- [ ] Add graceful shutdown.
-- [ ] Add health endpoint.
-- [ ] Add readiness endpoint if deployment requires it.
-- [ ] Add error correlation/request IDs.
-- [ ] Add metrics hooks.
+- [x] Validate all API inputs.
+- [x] Bound session count.
+- [x] Bound output history.
+- [x] Bound message size.
+- [x] Bound WebSocket payload size.
+- [x] Validate terminal dimensions.
+- [x] Validate CWD.
+- [x] Restrict supported shells.
+- [x] Avoid logging terminal data.
+- [x] Add structured logging.
+- [x] Add graceful shutdown.
+- [x] Add health endpoint.
+- [x] Add readiness endpoint if deployment requires it.
+- [x] Add error correlation/request IDs.
+- [x] Add metrics hooks.
 
 ---
 
@@ -530,15 +530,15 @@ Validate the complete system.
 
 ## Tasks
 
-- [ ] README quickstart.
-- [ ] Architecture documentation.
-- [ ] REST API documentation.
-- [ ] WebSocket protocol documentation.
-- [ ] Local development guide.
-- [ ] Testing guide.
-- [ ] Security warning.
-- [ ] Deployment guide.
-- [ ] Troubleshooting guide.
+- [x] README quickstart.
+- [x] Architecture documentation.
+- [x] REST API documentation.
+- [x] WebSocket protocol documentation.
+- [x] Local development guide.
+- [x] Testing guide.
+- [x] Security warning.
+- [x] Deployment guide.
+- [x] Troubleshooting guide.
 
 The documentation should clearly state that V1 is a trusted/internal terminal service and that exposing host PTYs to untrusted users requires authentication and isolation.
 
@@ -548,15 +548,15 @@ The documentation should clearly state that V1 is a trusted/internal terminal se
 
 ## Tasks
 
-- [ ] Run formatting check.
-- [ ] Run lint.
-- [ ] Run typecheck.
-- [ ] Run unit tests.
-- [ ] Run integration tests.
-- [ ] Build server.
-- [ ] Build web.
-- [ ] Use Nx affected tasks in CI.
-- [ ] Cache appropriate build/test outputs.
+- [x] Run formatting check.
+- [x] Run lint.
+- [x] Run typecheck.
+- [x] Run unit tests.
+- [x] Run integration tests.
+- [x] Build server.
+- [x] Build web.
+- [x] Use Nx affected tasks in CI.
+- [x] Cache appropriate build/test outputs.
 
 Nx supports affected-task execution and caching through its project/task graph, which is useful as the monorepo grows. citeturn0search0turn0search2
 
