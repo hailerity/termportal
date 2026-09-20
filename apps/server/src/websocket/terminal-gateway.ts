@@ -47,6 +47,7 @@ export const CLOSE_CODES = {
   invalidSessionId: 4400,
   sessionNotFound: 4404,
   sessionExited: 4409,
+  clientLimitReached: 4429,
 } as const;
 
 const TERMINAL_PATH = new RegExp(`^${API_BASE_PATH}/sessions/([^/]+)/terminal$`);
@@ -133,7 +134,7 @@ export function createTerminalGateway(options: TerminalGatewayOptions): Terminal
         return reject(error.code, error.message, CLOSE_CODES.sessionExited);
       }
       if (isTerminalError(error) && error.code === 'CLIENT_LIMIT_REACHED') {
-        return reject(error.code, error.message, CLOSE_CODES.tryAgainLater);
+        return reject(error.code, error.message, CLOSE_CODES.clientLimitReached);
       }
       logger.warn({ sessionId, err: error }, 'websocket attach failed');
       return ws.close(1011, 'Attach failed.');

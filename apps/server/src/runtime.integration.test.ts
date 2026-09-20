@@ -101,6 +101,7 @@ describe('server with a real PTY', () => {
 
   it('keeps its own configuration out of the shell and reports metrics', async () => {
     process.env.MAX_SESSIONS = '7';
+    process.env.LOG_LEVEL = 'silent';
     try {
       const { http, createSession, connect } = await start();
       const { id } = await createSession();
@@ -108,9 +109,9 @@ describe('server with a real PTY', () => {
       await client.waitFor((m) => m.type === 'status');
       client.send({
         type: 'input',
-        data: 'echo "cfg=[${MAX_SESSIONS:-unset}] path=${PATH:+set}"\r',
+        data: 'echo "cfg=[${MAX_SESSIONS:-unset}] generic=[${LOG_LEVEL:-unset}] path=${PATH:+set}"\r',
       });
-      await client.waitForOutput(/cfg=\[unset\] path=set/);
+      await client.waitForOutput(/cfg=\[unset\] generic=\[silent\] path=set/);
 
       const metrics = await (await fetch(`${http}/metrics`)).text();
       expect(metrics).toContain('termportal_active_sessions 1\n');
@@ -118,6 +119,7 @@ describe('server with a real PTY', () => {
       expect(metrics).toContain('# TYPE termportal_session_created_total counter');
     } finally {
       delete process.env.MAX_SESSIONS;
+      delete process.env.LOG_LEVEL;
     }
   });
 

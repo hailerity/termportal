@@ -14,6 +14,7 @@ import { logSessionEvent } from './observability/session-logger.js';
 import { createTerminalGateway } from './websocket/terminal-gateway.js';
 
 const TRANSPORT_CLOSE_TIMEOUT_MS = 5000;
+const INHERITED_BY_SHELLS = new Set(['HOST', 'LOG_LEVEL']);
 
 export interface RunningServer {
   readonly port: number;
@@ -45,12 +46,14 @@ export function maxBufferedBytesFor(outputBufferBytes: number): number {
 /**
  * The server's environment minus its own configuration. A shell that inherited `PORT=3000`
  * would, for example, make every dev server started inside the terminal fight for that port.
+ * `HOST` and `LOG_LEVEL` are left alone: they are generic names that tools run inside the
+ * terminal may legitimately expect, and inheriting them is harmless.
  */
 export function shellBaseEnvironment(
   env: Readonly<Record<string, string | undefined>>,
 ): Record<string, string | undefined> {
   const base = { ...env };
-  for (const name of CONFIG_VARIABLES) delete base[name];
+  for (const name of CONFIG_VARIABLES) if (!INHERITED_BY_SHELLS.has(name)) delete base[name];
   return base;
 }
 
@@ -65,8 +68,10 @@ export async function startServer(options: StartServerOptions): Promise<RunningS
     throw new Error(`DEFAULT_CWD "${config.defaultCwd}" is not a directory.`);
   }
 
-  const metrics = new Metrics();
-  const sessions = new SessionManager({
+  const metrics: Metrics = new Metrics(
+    () => sessions.list().filter((s) => s.status !== 'exited' && s.status !== 'failed').length,
+  );
+  const sessions: SessionManager = new SessionManager({
     ptyFactory: options.ptyFactory ?? new NodePtyFactory(),
     shells: shells as Record<string, string>,
     defaultShell,

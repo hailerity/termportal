@@ -88,7 +88,8 @@ describe('connection', () => {
     const accepted = await Promise.all([connect(id), connect(id)]);
     await Promise.all(accepted.map((c) => c.waitFor((m) => m.type === 'status')));
     const refused = await connect(id);
-    expect(await refused.closed).toMatchObject({ code: CLOSE_CODES.tryAgainLater });
+    // A 4xxx code: clients treat it as final instead of offering a reconnect that must fail.
+    expect(await refused.closed).toMatchObject({ code: CLOSE_CODES.clientLimitReached });
     expect(refused.messages[0]).toMatchObject({ type: 'error', code: 'CLIENT_LIMIT_REACHED' });
   });
 

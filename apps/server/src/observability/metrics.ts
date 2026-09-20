@@ -5,7 +5,6 @@ import type { SessionManagerEvent } from '@termportal/terminal-core';
  * no dependency and renders the Prometheus text format, so a scraper or a test can read it.
  */
 export class Metrics {
-  private activeSessions = 0;
   private sessionsCreated = 0;
   private sessionsExited = 0;
   private spawnFailures = 0;
@@ -14,14 +13,19 @@ export class Metrics {
   private websocketConnectionsTotal = 0;
   private protocolErrors = 0;
 
+  /**
+   * @param countActiveSessions Source of truth for the gauge. Deriving it from created/exited
+   *   events would drift whenever a session is forgotten without an exit event, e.g. after a
+   *   failed termination.
+   */
+  constructor(private readonly countActiveSessions: () => number = () => 0) {}
+
   onSessionEvent(event: SessionManagerEvent): void {
     switch (event.type) {
       case 'session.created':
-        this.activeSessions++;
         this.sessionsCreated++;
         return;
       case 'session.exited': {
-        this.activeSessions--;
         this.sessionsExited++;
         const { createdAt, lastActivityAt } = event.session;
         const seconds = (Date.parse(lastActivityAt) - Date.parse(createdAt)) / 1000;
@@ -51,7 +55,7 @@ export class Metrics {
 
   snapshot(): Record<string, number> {
     return {
-      termportal_active_sessions: this.activeSessions,
+      termportal_active_sessions: this.countActiveSessions(),
       termportal_session_created_total: this.sessionsCreated,
       termportal_session_exited_total: this.sessionsExited,
       termportal_pty_spawn_failures_total: this.spawnFailures,

@@ -15,7 +15,7 @@ const session: TerminalSessionSnapshot = {
 
 describe('Metrics', () => {
   it('tracks sessions, spawn failures and durations', () => {
-    const metrics = new Metrics();
+    const metrics = new Metrics(() => 1);
     metrics.onSessionEvent({ type: 'session.created', session });
     metrics.onSessionEvent({ type: 'session.created', session });
     metrics.onSessionEvent({ type: 'session.exited', session });
