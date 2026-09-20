@@ -24,6 +24,8 @@ export function TerminalView({ sessionId, baseUrl, onSessionChanged }: Props) {
 
   const [attempt, setAttempt] = useState(0);
   const [connection, setConnection] = useState<ConnectionState>('connecting');
+  // True once the server ended the stream on purpose; reconnecting would only repeat that.
+  const [finalClose, setFinalClose] = useState(false);
   const [status, setStatus] = useState<TerminalSessionStatus>();
   const [exit, setExit] = useState<ExitInfo>();
   const [error, setError] = useState<string>();
@@ -33,6 +35,7 @@ export function TerminalView({ sessionId, baseUrl, onSessionChanged }: Props) {
     const container = containerRef.current;
     if (!container) return;
     setConnection('connecting');
+    setFinalClose(false);
     setStatus(undefined);
     setExit(undefined);
     setError(undefined);
@@ -54,8 +57,9 @@ export function TerminalView({ sessionId, baseUrl, onSessionChanged }: Props) {
     const conn = new TerminalConnection({
       sessionId,
       baseUrl,
-      onStateChange(state) {
+      onStateChange(state, close) {
         setConnection(state);
+        if (close?.final) setFinalClose(true);
         if (state === 'open') {
           conn.sendResize(terminal.cols, terminal.rows);
           terminal.focus();
@@ -107,7 +111,7 @@ export function TerminalView({ sessionId, baseUrl, onSessionChanged }: Props) {
   }, [sessionId, baseUrl, attempt]);
 
   const ended = exit !== undefined || status === 'exited';
-  const canReconnect = connection === 'closed' && !ended;
+  const canReconnect = connection === 'closed' && !ended && !finalClose;
 
   return (
     <section className="terminal-pane">

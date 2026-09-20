@@ -24,9 +24,12 @@ export interface TerminalConnectionOptions {
   createSocket?: (url: string) => WebSocket;
 }
 
-/** `http://host/x` → `ws://host/x/api/v1/sessions/:id/terminal` (and https → wss). */
-export function terminalSocketUrl(sessionId: string, baseUrl: string): string {
-  const url = new URL(baseUrl);
+/**
+ * `http://host/x` → `ws://host/x/api/v1/sessions/:id/terminal` (and https → wss). A relative
+ * `baseUrl` such as `/proxy` — which the REST client accepts too — is resolved against `origin`.
+ */
+export function terminalSocketUrl(sessionId: string, baseUrl: string, origin?: string): string {
+  const url = new URL(baseUrl, origin);
   url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
   url.pathname = url.pathname.replace(/\/$/, '') + terminalSocketPath(sessionId);
   url.search = '';
@@ -56,7 +59,9 @@ export class TerminalConnection {
   private closedByUser = false;
 
   constructor(private readonly options: TerminalConnectionOptions) {
-    const url = terminalSocketUrl(options.sessionId, options.baseUrl || window.location.origin);
+    // An absolute base never consults the origin, which keeps this usable outside a browser.
+    const origin = typeof window === 'undefined' ? undefined : window.location.origin;
+    const url = terminalSocketUrl(options.sessionId, options.baseUrl || origin || '', origin);
     this.socket = (options.createSocket ?? ((u) => new WebSocket(u)))(url);
     options.onStateChange('connecting');
 

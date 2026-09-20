@@ -17,15 +17,18 @@ export function App() {
   const [sessions, setSessions] = useState<TerminalSessionResponse[]>([]);
   const [selected, setSelected] = useState<string | undefined>(sessionFromHash);
   const [shell, setShell] = useState<ShellType | ''>('');
-  const [error, setError] = useState<string>();
+  // Kept apart so that a successful poll cannot wipe the result of a failed user action.
+  const [listError, setListError] = useState<string>();
+  const [actionError, setActionError] = useState<string>();
   const [busy, setBusy] = useState(false);
+  const error = actionError ?? listError;
 
   const refresh = useCallback(async () => {
     try {
       setSessions(await api.list());
-      setError(undefined);
+      setListError(undefined);
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'Failed to load sessions.');
+      setListError(e instanceof ApiError ? e.message : 'Failed to load sessions.');
     }
   }, [api]);
 
@@ -48,23 +51,28 @@ export function App() {
 
   const createSession = async () => {
     setBusy(true);
+    setActionError(undefined);
     try {
       const session = await api.create(shell ? { shell } : {});
       await refresh();
       select(session.id);
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'Failed to create a session.');
+      setActionError(e instanceof ApiError ? e.message : 'Failed to create a session.');
     } finally {
       setBusy(false);
     }
   };
 
   const terminateSession = async (id: string) => {
+    setActionError(undefined);
     try {
       await api.terminate(id);
     } catch (e) {
+      // Already gone is the outcome the user asked for; anything else leaves the session alive.
       if (!(e instanceof ApiError && e.code === 'SESSION_NOT_FOUND')) {
-        setError(e instanceof ApiError ? e.message : 'Failed to terminate the session.');
+        setActionError(e instanceof ApiError ? e.message : 'Failed to terminate the session.');
+        await refresh();
+        return;
       }
     }
     if (selected === id) select(undefined);
@@ -95,6 +103,11 @@ export function App() {
         {error && (
           <div className="notice notice-error" data-testid="app-error">
             {error}
+            {actionError && (
+              <button type="button" className="dismiss" onClick={() => setActionError(undefined)}>
+                Dismiss
+              </button>
+            )}
           </div>
         )}
         <ul className="session-list" data-testid="session-list">

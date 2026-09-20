@@ -18,6 +18,12 @@ describe('terminalSocketUrl', () => {
   ])('maps %s', (base, expected) => {
     expect(terminalSocketUrl('term_abcdefgh', base)).toBe(expected);
   });
+
+  it('resolves a relative base against the page origin', () => {
+    expect(terminalSocketUrl('term_abcdefgh', '/proxy', 'https://host.example')).toBe(
+      'wss://host.example/proxy/api/v1/sessions/term_abcdefgh/terminal',
+    );
+  });
 });
 
 describe('chunkInput', () => {
