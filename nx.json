@@ -40,6 +40,9 @@
     },
     "serve": {
       "continuous": true
+    },
+    "e2e": {
+      "cache": false
     }
   }
 }

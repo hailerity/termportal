@@ -1,0 +1,21 @@
+{
+  "name": "@termportal/web-e2e",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "nx": {
+    "name": "web-e2e",
+    "implicitDependencies": [
+      "web",
+      "server"
+    ]
+  },
+  "scripts": {
+    "e2e": "playwright test",
+    "typecheck": "tsc -p tsconfig.json",
+    "lint": "eslint ."
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0"
+  }
+}
