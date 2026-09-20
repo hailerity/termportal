@@ -3,6 +3,7 @@ import cors from '@fastify/cors';
 import type { SessionManager } from '@termportal/terminal-core';
 import Fastify, { type FastifyBaseLogger, type FastifyInstance } from 'fastify';
 import { HttpError, mapError } from './http/errors.js';
+import { isOriginAllowed } from './http/origin.js';
 import { registerSessionRoutes } from './http/session-routes.js';
 
 export interface AppOptions {
@@ -22,6 +23,8 @@ export async function buildApp(options: AppOptions): Promise<FastifyInstance> {
       ? { loggerInstance: options.logger }
       : { logger: options.logger ?? false }),
     bodyLimit: MAX_BODY_BYTES,
+    // close() must not wait for keep-alive or stuck connections during shutdown.
+    forceCloseConnections: true,
     requestIdHeader: false,
     // Reuse a well-formed caller-supplied id so errors can be correlated across services.
     genReqId: (request) => {
@@ -50,6 +53,10 @@ export async function buildApp(options: AppOptions): Promise<FastifyInstance> {
 
   app.addHook('onRequest', async (request, reply) => {
     reply.header('x-request-id', request.id);
+    // CORS alone would still let a foreign page *send* a body-less POST and spawn shells.
+    if (!isOriginAllowed(request.headers.origin, request.headers.host, options.allowedOrigins)) {
+      throw new HttpError('ORIGIN_NOT_ALLOWED', 'Origin is not allowed.');
+    }
   });
 
   app.setErrorHandler((error, request, reply) => {

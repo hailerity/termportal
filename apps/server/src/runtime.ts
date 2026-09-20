@@ -12,6 +12,8 @@ import type { ServerConfig } from './config/config.js';
 import { logSessionEvent } from './observability/session-logger.js';
 import { createTerminalGateway } from './websocket/terminal-gateway.js';
 
+const TRANSPORT_CLOSE_TIMEOUT_MS = 5000;
+
 export interface RunningServer {
   readonly port: number;
   readonly sessions: SessionManager;
@@ -79,8 +81,16 @@ export async function startServer(options: StartServerOptions): Promise<RunningS
     // Sessions first: clients receive the final exit event before their sockets are closed.
     const survivors = await sessions.shutdown(config.shutdownTimeoutMs);
     if (survivors.length > 0) logger?.error({ survivors }, 'sessions survived shutdown');
-    await gateway.close();
-    await app.close();
+    // Sockets that refuse to close must not keep the process alive past the deadline.
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const deadline = new Promise<'timeout'>((resolve) => {
+      timer = setTimeout(() => resolve('timeout'), TRANSPORT_CLOSE_TIMEOUT_MS);
+    });
+    const closed = gateway.close().then(() => app.close());
+    if ((await Promise.race([closed, deadline])) === 'timeout') {
+      logger?.warn({}, 'transport did not close in time');
+    }
+    clearTimeout(timer);
     logger?.info('server stopped');
     return survivors;
   };

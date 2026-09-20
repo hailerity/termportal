@@ -57,6 +57,16 @@ describe('POST /api/v1/sessions', () => {
     expect(response.statusCode).toBe(201);
   });
 
+  it('rejects an explicit null body', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/v1/sessions',
+      headers: { 'content-type': 'application/json' },
+      payload: 'null',
+    });
+    expectError(response, 400, 'INVALID_REQUEST');
+  });
+
   it('creates a session from the documented request', async () => {
     const response = await create({
       shell: 'sh',
@@ -201,5 +211,26 @@ describe('cross-cutting', () => {
       headers: { origin: 'https://evil.example' },
     });
     expect(denied.headers['access-control-allow-origin']).toBeUndefined();
+    expectError(denied, 403, 'ORIGIN_NOT_ALLOWED');
+  });
+
+  it('refuses a body-less cross-site POST, which needs no CORS preflight', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/v1/sessions',
+      headers: { origin: 'https://evil.example' },
+    });
+    expectError(response, 403, 'ORIGIN_NOT_ALLOWED');
+    expect(harness.ptyFactory.spawned).toHaveLength(0);
+  });
+
+  it('accepts same-origin and origin-less requests', async () => {
+    const sameOrigin = await app.inject({
+      method: 'POST',
+      url: '/api/v1/sessions',
+      headers: { origin: 'http://termportal.internal', host: 'termportal.internal' },
+    });
+    expect(sameOrigin.statusCode).toBe(201);
+    expect((await create()).statusCode).toBe(201);
   });
 });

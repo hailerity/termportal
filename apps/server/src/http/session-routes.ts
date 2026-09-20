@@ -19,7 +19,9 @@ export function registerSessionRoutes(app: FastifyInstance, sessions: SessionMan
   const base = `${API_BASE_PATH}/sessions`;
 
   app.post(base, async (request, reply): Promise<TerminalSessionResponse> => {
-    const parsed = createSessionRequestSchema.safeParse(request.body ?? {});
+    // Only a missing body means "all defaults"; an explicit `null` is an invalid request.
+    const body = request.body === undefined ? {} : request.body;
+    const parsed = createSessionRequestSchema.safeParse(body);
     if (!parsed.success) throw httpErrorFromZod(parsed.error);
     const session = await sessions.create(parsed.data);
     reply.code(201).header('location', `${base}/${session.id}`);

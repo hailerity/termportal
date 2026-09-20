@@ -14,6 +14,7 @@ import {
   type ServerMessage,
 } from '@termportal/terminal-protocol';
 import { WebSocket, WebSocketServer, type RawData } from 'ws';
+import { isOriginAllowed } from '../http/origin.js';
 
 interface Logger {
   info(fields: object, message: string): void;
@@ -69,8 +70,9 @@ export function createTerminalGateway(options: TerminalGatewayOptions): Terminal
     const path = (request.url ?? '').split('?')[0] ?? '';
     const match = TERMINAL_PATH.exec(path);
     if (!match) return refuse(socket, 404, 'Not Found');
-    if (!isOriginAllowed(request, options.allowedOrigins)) {
-      logger.warn({ origin: request.headers.origin }, 'websocket origin rejected');
+    const { origin, host } = request.headers;
+    if (!isOriginAllowed(origin, host, options.allowedOrigins)) {
+      logger.warn({ origin }, 'websocket origin rejected');
       return refuse(socket, 403, 'Forbidden');
     }
     let rawId: string;
@@ -193,20 +195,4 @@ export function createTerminalGateway(options: TerminalGatewayOptions): Terminal
 
 function refuse(socket: Duplex, status: number, reason: string): void {
   socket.end(`HTTP/1.1 ${status} ${reason}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`);
-}
-
-/**
- * WebSockets are not covered by CORS, so without this check any web page could drive a shell on
- * a server reachable from the visitor's browser. Requests without an Origin header come from
- * non-browser clients and are allowed.
- */
-function isOriginAllowed(request: IncomingMessage, allowedOrigins: string[]): boolean {
-  const origin = request.headers.origin;
-  if (origin === undefined) return true;
-  if (allowedOrigins.includes('*') || allowedOrigins.includes(origin)) return true;
-  try {
-    return new URL(origin).host === request.headers.host;
-  } catch {
-    return false;
-  }
 }

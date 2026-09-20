@@ -7,12 +7,21 @@ async function main(): Promise<void> {
   const logger = pino({ level: config.logLevel });
   const server = await startServer({ config, logger });
 
+  let signals = 0;
   const shutdown = (signal: string) => {
     logger.info({ signal }, 'signal received');
-    void server.stop().then((survivors) => process.exit(survivors.length > 0 ? 1 : 0));
+    // A second signal means "stop waiting". PTYs still get SIGHUP when their master fds close.
+    if (++signals > 1) process.exit(1);
+    server.stop().then(
+      (survivors) => process.exit(survivors.length > 0 ? 1 : 0),
+      (err: unknown) => {
+        logger.error({ err }, 'shutdown failed');
+        process.exit(1);
+      },
+    );
   };
-  process.once('SIGINT', () => shutdown('SIGINT'));
-  process.once('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
 }
 
 main().catch((error: unknown) => {
