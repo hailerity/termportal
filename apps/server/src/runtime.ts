@@ -30,6 +30,17 @@ export interface StartServerOptions {
   ptyFactory?: PtyFactory;
 }
 
+/**
+ * The slow-client limit has to leave room for the replay, which is queued as a single frame on
+ * attach — otherwise a freshly attached client would be dropped on the next output, and again
+ * on every reconnect. JSON escapes control characters, so a frame can be up to six times the
+ * size of the raw output.
+ */
+export function maxBufferedBytesFor(outputBufferBytes: number): number {
+  const MIN = 16 * 1024 * 1024;
+  return Math.max(MIN, outputBufferBytes * 6 + MIN / 2);
+}
+
 /** Composition root: wires configuration, the real PTY runtime, REST and WebSocket together. */
 export async function startServer(options: StartServerOptions): Promise<RunningServer> {
   const { config, logger } = options;
@@ -67,6 +78,7 @@ export async function startServer(options: StartServerOptions): Promise<RunningS
     server: app.server,
     sessions,
     allowedOrigins: config.allowedOrigins,
+    maxBufferedBytes: maxBufferedBytesFor(config.outputBufferBytes),
     ...(logger ? { logger } : {}),
   });
 

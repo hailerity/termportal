@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { WebSocket } from 'ws';
 import { buildApp } from '../app.js';
+import { maxBufferedBytesFor } from '../runtime.js';
 import { createFakeSessions } from '../testing/harness.js';
 import { TestTerminalClient } from '../testing/ws-client.js';
 import { CLOSE_CODES, createTerminalGateway, type TerminalGateway } from './terminal-gateway.js';
@@ -12,11 +13,20 @@ let gateway: TerminalGateway;
 let harness: ReturnType<typeof createFakeSessions>;
 let baseUrl: string;
 const clients: TestTerminalClient[] = [];
+const REPLAY_BYTES = 256 * 1024;
+
+/** Runs on every attach; lets a test make the PTY print in the same tick as the replay. */
+let onAttached: (() => void) | undefined;
 
 async function start(
   options: { maxProtocolErrors?: number; maxBufferedBytes?: number; closeGraceMs?: number } = {},
 ) {
-  harness = createFakeSessions();
+  harness = createFakeSessions({
+    outputBufferBytes: REPLAY_BYTES,
+    onEvent: (event) => {
+      if (event.type === 'client.attached') onAttached?.();
+    },
+  });
   app = await buildApp({ sessions: harness.sessions, allowedOrigins: ['http://localhost:4200'] });
   gateway = createTerminalGateway({
     server: app.server,
@@ -43,6 +53,7 @@ const isError = (code: string) => (m: { type: string; code?: string }) =>
 beforeEach(() => start());
 
 afterEach(async () => {
+  onAttached = undefined;
   for (const client of clients.splice(0)) client.ws.terminate();
   await gateway.close();
   await app.close();
@@ -271,6 +282,38 @@ describe('lifecycle', () => {
     const startedAt = Date.now();
     await gateway.close();
     expect(Date.now() - startedAt).toBeLessThan(2000);
+  });
+
+  describe('a full replay followed immediately by live output', () => {
+    // Escape characters are the worst case: JSON inflates each one to six bytes on the wire.
+    async function attachToBusySession(maxBufferedBytes: number) {
+      await gateway.close();
+      await app.close();
+      await start({ maxBufferedBytes });
+      const { id } = await harness.sessions.create();
+      const pty = harness.ptyFactory.last;
+      pty.emitData('\u001b'.repeat(REPLAY_BYTES));
+      onAttached = () => pty.emitData('live-output');
+      return connect(id);
+    }
+
+    it('drops the fresh client when the queue limit ignores the replay size', async () => {
+      const client = await attachToBusySession(REPLAY_BYTES);
+      expect((await client.closed).code).toBe(CLOSE_CODES.tryAgainLater);
+    });
+
+    it('keeps the client when the limit is derived from the replay size', async () => {
+      const client = await attachToBusySession(maxBufferedBytesFor(REPLAY_BYTES));
+      await client.waitForOutput(/live-output/);
+      expect(client.output).toHaveLength(REPLAY_BYTES + 'live-output'.length);
+    });
+  });
+
+  it('sizes the queue limit to hold a worst-case replay frame', () => {
+    for (const bytes of [0, 1024, 5 * 1024 * 1024, 16 * 1024 * 1024]) {
+      expect(maxBufferedBytesFor(bytes)).toBeGreaterThan(bytes * 6);
+      expect(maxBufferedBytesFor(bytes)).toBeGreaterThanOrEqual(16 * 1024 * 1024);
+    }
   });
 
   it('closes open sockets when the gateway shuts down', async () => {

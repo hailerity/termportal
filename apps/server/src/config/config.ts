@@ -16,7 +16,7 @@ const envSchema = z.object({
   DEFAULT_CWD: z.string().min(1).default('/tmp'),
   DEFAULT_COLS: integer(2, 1000).default(120),
   DEFAULT_ROWS: integer(1, 500).default(40),
-  OUTPUT_BUFFER_BYTES: integer(1024, 64 * 1024 * 1024).default(5 * 1024 * 1024),
+  OUTPUT_BUFFER_BYTES: integer(0, 16 * 1024 * 1024).default(5 * 1024 * 1024),
   SHUTDOWN_TIMEOUT_MS: integer(0, 600_000).default(10_000),
   MAX_SESSIONS: integer(1, 10_000).default(100),
   EXITED_SESSION_TTL_MS: integer(0, 86_400_000).default(5 * 60 * 1000),

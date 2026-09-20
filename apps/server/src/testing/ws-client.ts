@@ -10,12 +10,14 @@ export class TestTerminalClient {
   readonly messages: ServerMessage[] = [];
   readonly closed: Promise<{ code: number; reason: string }>;
   private waiters: Array<() => void> = [];
+  private outputText = '';
 
   private constructor(readonly ws: WebSocket) {
     ws.on('message', (data) => {
       const decoded = decodeServerMessage(data.toString());
       if (!decoded.ok) throw new Error(`Server sent an invalid message: ${data.toString()}`);
       this.messages.push(decoded.message);
+      if (decoded.message.type === 'output') this.outputText += decoded.message.data;
       for (const wake of this.waiters.splice(0)) wake();
     });
     this.closed = new Promise((resolve) =>
@@ -40,8 +42,9 @@ export class TestTerminalClient {
     this.ws.send(data);
   }
 
+  /** All output received so far; accumulated incrementally so large streams stay cheap. */
   get output(): string {
-    return this.messages.map((m) => (m.type === 'output' ? m.data : '')).join('');
+    return this.outputText;
   }
 
   /** Resolves with the first recorded message matching `predicate`, waiting if necessary. */
@@ -72,8 +75,19 @@ export class TestTerminalClient {
     }
   }
 
+  /**
+   * Waits until the output matches `pattern`. Only text that arrived since the previous check
+   * (plus an overlap for matches spanning two frames) is scanned, so multi-megabyte streams do
+   * not turn the wait quadratic.
+   */
   waitForOutput(pattern: RegExp, timeoutMs = 5000): Promise<ServerMessage> {
-    return this.waitFor(() => pattern.test(this.output), timeoutMs);
+    const OVERLAP = 1024;
+    let scanned = 0;
+    return this.waitFor(() => {
+      const from = Math.max(0, scanned - OVERLAP);
+      scanned = this.outputText.length;
+      return pattern.test(this.outputText.slice(from));
+    }, timeoutMs);
   }
 
   close(): Promise<{ code: number; reason: string }> {

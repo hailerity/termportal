@@ -70,6 +70,28 @@ describe('BoundedOutputBuffer', () => {
     expect(bytes(snapshot)).toBeGreaterThan(1024 - 4);
   });
 
+  it('restarts a cut replay after a line break, keeping escape sequences whole', () => {
+    const buffer = new BoundedOutputBuffer(30);
+    buffer.append('first line \u001b[38;5;12mblue\u001b[0m\r\nsecond line\r\n');
+    const snapshot = buffer.snapshot();
+    expect(snapshot).toBe('second line\r\n');
+    expect(snapshot).not.toMatch(/^[0-9;]*m/);
+  });
+
+  it('stays correct and fast with very many tiny chunks', () => {
+    const buffer = new BoundedOutputBuffer(64 * 1024);
+    const startedAt = performance.now();
+    let expected = '';
+    for (let i = 0; i < 300_000; i++) {
+      const chunk = String.fromCharCode(97 + (i % 26));
+      buffer.append(chunk);
+      if (i >= 300_000 - 64 * 1024) expected += chunk;
+    }
+    expect(buffer.snapshot()).toBe(expected);
+    expect(buffer.byteSize).toBe(64 * 1024);
+    expect(performance.now() - startedAt).toBeLessThan(2000);
+  });
+
   it('can be disabled and cleared', () => {
     const disabled = new BoundedOutputBuffer(0);
     disabled.append('x');

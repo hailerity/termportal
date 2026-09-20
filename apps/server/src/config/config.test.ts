@@ -42,6 +42,7 @@ describe('loadConfig', () => {
     { DEFAULT_SHELL: '/bin/bash' },
     { MAX_SESSIONS: '0' },
     { DEFAULT_COLS: '1.5' },
+    { OUTPUT_BUFFER_BYTES: String(64 * 1024 * 1024) },
   ])('rejects %j', (env) => {
     expect(() => loadConfig(env)).toThrow(/Invalid configuration/);
   });
