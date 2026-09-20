@@ -100,7 +100,11 @@ export class BoundedOutputBuffer implements OutputBuffer {
     if (candidate.length > 0 && isLowSurrogate(candidate.charCodeAt(0))) {
       candidate = candidate.slice(1);
     }
-    // Escape sequences do not span lines, so restarting after a line break keeps them whole.
+    // Nothing was cut: the text already starts wherever the process started it.
+    if (candidate.length === text.length) return { text: candidate, bytes };
+    // CSI/SGR sequences (colours, cursor moves) never contain a line break, so restarting just
+    // after one keeps them whole. String sequences (OSC/DCS payloads) may span lines; those
+    // can still be cut, which only a terminal-state serializer could avoid.
     const lineBreak = candidate.slice(0, LINE_SEARCH_WINDOW).indexOf('\n');
     if (lineBreak !== -1 && lineBreak + 1 < candidate.length) {
       candidate = candidate.slice(lineBreak + 1);
