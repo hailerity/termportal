@@ -47,6 +47,7 @@ export interface SessionManagerOptions {
   /** How long an exited session stays listed so clients can observe its final state. */
   exitedSessionTtlMs?: number;
   killTimeoutMs?: number;
+  killGraceMs?: number;
   generateId?: () => string;
   now?: () => Date;
   onEvent?: (event: SessionManagerEvent) => void;
@@ -117,6 +118,7 @@ export class SessionManager {
         cols,
         rows,
         ...(o.killTimeoutMs !== undefined ? { killTimeoutMs: o.killTimeoutMs } : {}),
+        ...(o.killGraceMs !== undefined ? { killGraceMs: o.killGraceMs } : {}),
         ...(o.now ? { now: o.now } : {}),
       });
       try {
@@ -136,6 +138,9 @@ export class SessionManager {
       const managed: ManagedSession = { session };
       this.sessions.set(session.id, managed);
       session.onExit(() => this.handleExit(managed));
+      session.onClientDetached(() =>
+        this.emit({ type: 'client.detached', sessionId: session.id, clients: session.clientCount }),
+      );
       if (!session.isLive) this.handleExit(managed);
       this.emit({ type: 'session.created', session: session.snapshot() });
       return session.snapshot();
@@ -157,16 +162,7 @@ export class SessionManager {
     const session = this.require(id).session;
     const attachment = session.attach(client);
     this.emit({ type: 'client.attached', sessionId: id, clients: session.clientCount });
-    let detached = false;
-    return {
-      ...attachment,
-      detach: () => {
-        if (detached) return;
-        detached = true;
-        attachment.detach();
-        this.emit({ type: 'client.detached', sessionId: id, clients: session.clientCount });
-      },
-    };
+    return attachment;
   }
 
   /** Terminates the session, waits for its process to exit, then forgets it. */
@@ -181,23 +177,36 @@ export class SessionManager {
 
   /**
    * Stops accepting sessions and terminates every PTY. Sessions still alive after `timeoutMs`
-   * are sent SIGKILL so no shell outlives the server.
+   * are sent SIGKILL and given `forceKillGraceMs` to be reaped, so no shell outlives the server.
+   * Returns the ids of sessions that were still alive even then.
    */
-  async shutdown(timeoutMs: number): Promise<void> {
+  async shutdown(timeoutMs: number, forceKillGraceMs = 1000): Promise<string[]> {
     this.shuttingDown = true;
     const live = [...this.sessions.values()].filter(({ session }) => session.isLive);
-    const allExited = Promise.all(live.map(({ session }) => session.terminate()));
+    const waitForExits = (ms: number) => {
+      const exits = live
+        .filter(({ session }) => session.isLive)
+        .map(({ session }) => new Promise<void>((resolve) => session.onExit(() => resolve())));
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const timeout = new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, ms);
+      });
+      return Promise.race([Promise.all(exits), timeout]).finally(() => clearTimeout(timer));
+    };
 
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const timedOut = new Promise<'timeout'>((resolve) => {
-      timer = setTimeout(() => resolve('timeout'), timeoutMs);
-    });
-    const outcome = await Promise.race([allExited, timedOut]);
-    if (timer) clearTimeout(timer);
-    if (outcome === 'timeout') {
+    const graceful = waitForExits(timeoutMs);
+    // Failures surface through the survivor list; shutdown itself never rejects.
+    for (const { session } of live) session.terminate().catch(() => {});
+    await graceful;
+
+    if (live.some(({ session }) => session.isLive)) {
+      const forced = waitForExits(forceKillGraceMs);
       for (const { session } of live) session.forceKill();
+      await forced;
     }
+    const survivors = live.filter(({ session }) => session.isLive).map(({ session }) => session.id);
     for (const managed of [...this.sessions.values()]) this.remove(managed);
+    return survivors;
   }
 
   private liveCount(): number {

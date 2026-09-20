@@ -185,6 +185,24 @@ describe('attach', () => {
     ]);
   });
 
+  it('reports clients dropped by the session as detached', async () => {
+    const { manager, ptyFactory, events } = setup();
+    const { id } = await manager.create();
+    manager.attach(id, { send: () => {} });
+    ptyFactory.last.emitExit();
+    expect(events).toContainEqual({ type: 'client.detached', sessionId: id, clients: 0 });
+  });
+
+  it('propagates termination failures and keeps the session', async () => {
+    const { manager, ptyFactory } = setup({ killTimeoutMs: 100, killGraceMs: 100 });
+    const { id } = await manager.create();
+    ptyFactory.last.exitOnSignals = new Set();
+    const done = expectCode(manager.terminate(id), 'SESSION_TERMINATION_FAILED');
+    await vi.advanceTimersByTimeAsync(200);
+    await done;
+    expect(manager.get(id)).toMatchObject({ status: 'terminating' });
+  });
+
   it('rejects unknown and exited sessions', async () => {
     const { manager, ptyFactory } = setup();
     expect(() => manager.attach('term_unknown1', { send: () => {} })).toThrow(
@@ -239,19 +257,29 @@ describe('shutdown', () => {
     await expectCode(manager.create(), 'SESSION_LIMIT_REACHED');
   });
 
-  it('force-kills sessions that outlive the timeout', async () => {
-    const { manager, ptyFactory } = setup({ killTimeoutMs: 60_000 });
+  it('force-kills sessions that outlive the timeout and waits for them', async () => {
+    const { manager, ptyFactory, events } = setup({ killTimeoutMs: 60_000 });
     await manager.create();
     const stubborn = ptyFactory.last;
     stubborn.exitOnSignals = new Set(['SIGKILL']);
     const done = manager.shutdown(2000);
     await vi.advanceTimersByTimeAsync(2000);
-    await done;
+    await expect(done).resolves.toEqual([]);
     expect(stubborn.kills).toEqual(['SIGHUP', 'SIGKILL']);
-    expect(stubborn.exited).toBe(true);
+    expect(events.map((e) => e.type)).toContain('session.exited');
+  });
+
+  it('reports sessions that survive even SIGKILL', async () => {
+    const { manager, ptyFactory } = setup({ killTimeoutMs: 60_000 });
+    const { id } = await manager.create();
+    ptyFactory.last.exitOnSignals = new Set();
+    const done = manager.shutdown(2000, 500);
+    await vi.advanceTimersByTimeAsync(2500);
+    await expect(done).resolves.toEqual([id]);
+    expect(manager.list()).toEqual([]);
   });
 
   it('resolves immediately when there is nothing to stop', async () => {
-    await expect(setup().manager.shutdown(1000)).resolves.toBeUndefined();
+    await expect(setup().manager.shutdown(1000)).resolves.toEqual([]);
   });
 });

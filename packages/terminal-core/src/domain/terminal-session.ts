@@ -45,10 +45,18 @@ export interface TerminalSessionOptions {
   rows: number;
   /** Delay before an unresponsive PTY is sent SIGKILL during termination. */
   killTimeoutMs?: number;
+  /** How long to wait for the exit after SIGKILL before termination is reported as failed. */
+  killGraceMs?: number;
   now?: () => Date;
 }
 
 const DEFAULT_KILL_TIMEOUT_MS = 3000;
+const DEFAULT_KILL_GRACE_MS = 2000;
+
+interface ExitWaiter {
+  resolve: () => void;
+  reject: (error: Error) => void;
+}
 
 export class TerminalSession {
   readonly id: string;
@@ -64,13 +72,15 @@ export class TerminalSession {
   private lastActivityAt: Date;
   private readonly now: () => Date;
   private readonly killTimeoutMs: number;
+  private readonly killGraceMs: number;
   private killTimer: ReturnType<typeof setTimeout> | undefined;
   private ptySubscriptions: Unsubscribe[] = [];
-  private exitWaiters: Array<() => void> = [];
+  private exitWaiters: ExitWaiter[] = [];
 
   private readonly clients = new Set<TerminalClient>();
   private readonly statusEmitter = new Emitter<TerminalSessionStatus>();
   private readonly exitEmitter = new Emitter<PtyExitEvent>();
+  private readonly clientDetachedEmitter = new Emitter<TerminalClient>();
 
   constructor(options: TerminalSessionOptions) {
     assertValidDimensions(options.cols, options.rows);
@@ -81,6 +91,7 @@ export class TerminalSession {
     this.rows = options.rows;
     this.now = options.now ?? (() => new Date());
     this.killTimeoutMs = options.killTimeoutMs ?? DEFAULT_KILL_TIMEOUT_MS;
+    this.killGraceMs = options.killGraceMs ?? DEFAULT_KILL_GRACE_MS;
     this.createdAt = this.now();
     this.lastActivityAt = this.createdAt;
   }
@@ -124,7 +135,8 @@ export class TerminalSession {
       pty.onData((data) => this.handleOutput(data)),
       pty.onExit((event) => this.handleExit(event)),
     ];
-    this.setStatus('running');
+    // An adapter may report an exit while we subscribe; never resurrect such a session.
+    if (this.currentStatus === 'starting') this.setStatus('running');
   }
 
   write(data: string): void {
@@ -151,25 +163,28 @@ export class TerminalSession {
     if (!this.isLive) {
       throw new TerminalError('SESSION_ALREADY_EXITED', 'Terminal session has already exited.');
     }
+    // Deliver the status before registering, so a dead transport fails the attach outright.
+    client.send({ type: 'status', status: this.currentStatus });
     this.clients.add(client);
-    this.sendTo(client, { type: 'status', status: this.currentStatus });
     return {
       write: (data) => this.write(data),
       resize: (cols, rows) => this.resize(cols, rows),
-      detach: () => {
-        this.clients.delete(client);
-      },
+      detach: () => this.dropClient(client),
     };
   }
 
   /**
    * Asks the PTY to exit and resolves once it has. Idempotent: repeated calls share the same
-   * exit, and calling it on an exited or failed session resolves immediately.
+   * exit, and calling it on an exited or failed session resolves immediately. Rejects with
+   * `SESSION_TERMINATION_FAILED` when the process is still alive after SIGKILL plus a grace
+   * period; the session then stays `terminating` and a later call tries again.
    */
   terminate(): Promise<void> {
     if (!this.isLive) return Promise.resolve();
-    const exited = new Promise<void>((resolve) => this.exitWaiters.push(resolve));
-    if (this.currentStatus === 'terminating') return exited;
+    const exited = new Promise<void>((resolve, reject) =>
+      this.exitWaiters.push({ resolve, reject }),
+    );
+    if (this.currentStatus === 'terminating' && this.killTimer) return exited;
 
     const pty = this.pty;
     if (!pty) {
@@ -180,7 +195,11 @@ export class TerminalSession {
     this.setStatus('terminating');
     // SIGHUP is what a closing terminal sends; interactive shells ignore SIGTERM.
     this.safeKill(pty, 'SIGHUP');
-    this.killTimer = setTimeout(() => this.safeKill(pty, 'SIGKILL'), this.killTimeoutMs);
+    this.killTimer = setTimeout(() => {
+      this.safeKill(pty, 'SIGKILL');
+      this.killTimer = setTimeout(() => this.failTermination(), this.killGraceMs);
+      this.killTimer.unref?.();
+    }, this.killTimeoutMs);
     this.killTimer.unref?.();
     return exited;
   }
@@ -196,6 +215,11 @@ export class TerminalSession {
 
   onExit(listener: (event: PtyExitEvent) => void): Unsubscribe {
     return this.exitEmitter.on(listener);
+  }
+
+  /** Fires whenever a client leaves: explicit detach, failed transport, or session exit. */
+  onClientDetached(listener: (client: TerminalClient) => void): Unsubscribe {
+    return this.clientDetachedEmitter.on(listener);
   }
 
   snapshot(): TerminalSessionSnapshot {
@@ -248,11 +272,25 @@ export class TerminalSession {
       exitCode: event.exitCode,
       ...(event.signal !== undefined ? { signal: event.signal } : {}),
     });
-    this.clients.clear();
+    for (const client of [...this.clients]) this.dropClient(client);
     this.exitEmitter.emit(event);
-    for (const resolve of this.exitWaiters.splice(0)) resolve();
+    for (const waiter of this.exitWaiters.splice(0)) waiter.resolve();
     this.statusEmitter.clear();
     this.exitEmitter.clear();
+    this.clientDetachedEmitter.clear();
+  }
+
+  private failTermination(): void {
+    this.killTimer = undefined;
+    const error = new TerminalError(
+      'SESSION_TERMINATION_FAILED',
+      'Terminal process did not exit after being killed.',
+    );
+    for (const waiter of this.exitWaiters.splice(0)) waiter.reject(error);
+  }
+
+  private dropClient(client: TerminalClient): void {
+    if (this.clients.delete(client)) this.clientDetachedEmitter.emit(client);
   }
 
   private setStatus(status: TerminalSessionStatus): void {
@@ -271,7 +309,7 @@ export class TerminalSession {
     try {
       client.send(event);
     } catch {
-      this.clients.delete(client);
+      this.dropClient(client);
     }
   }
 

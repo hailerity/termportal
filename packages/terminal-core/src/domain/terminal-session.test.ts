@@ -5,7 +5,9 @@ import { TerminalSession, type TerminalClientEvent } from './terminal-session.js
 
 const spawnOptions = { file: '/bin/bash', args: [], cwd: '/tmp', env: {} };
 
-function createSession(overrides: { now?: () => Date; killTimeoutMs?: number } = {}) {
+type Overrides = { now?: () => Date; killTimeoutMs?: number; killGraceMs?: number };
+
+function createSession(overrides: Overrides = {}) {
   return new TerminalSession({
     id: 'term_test0001',
     shell: '/bin/bash',
@@ -16,7 +18,7 @@ function createSession(overrides: { now?: () => Date; killTimeoutMs?: number } =
   });
 }
 
-function startSession(overrides: { now?: () => Date; killTimeoutMs?: number } = {}) {
+function startSession(overrides: Overrides = {}) {
   const factory = new FakePtyFactory();
   const session = createSession(overrides);
   session.start((size) => factory.spawn({ ...spawnOptions, ...size }));
@@ -67,6 +69,21 @@ describe('lifecycle', () => {
     );
     expect(session.status).toBe('failed');
     expect(session.isLive).toBe(false);
+  });
+
+  it('stays "exited" when the PTY reports its exit while being subscribed to', () => {
+    const session = createSession();
+    session.start((size) => {
+      const pty = new FakePty(1, { ...spawnOptions, ...size });
+      const onExit = pty.onExit.bind(pty);
+      pty.onExit = (handler) => {
+        const unsubscribe = onExit(handler);
+        pty.emitExit({ exitCode: 127 });
+        return unsubscribe;
+      };
+      return pty;
+    });
+    expect(session.snapshot()).toMatchObject({ status: 'exited', exitCode: 127 });
   });
 
   it('cannot be started twice', () => {
@@ -226,6 +243,41 @@ describe('clients', () => {
     expect(healthy.events.filter((e) => e.type === 'output')).toHaveLength(2);
   });
 
+  it('fails the attach when the client cannot even receive the status', () => {
+    const { session } = startSession();
+    expect(() =>
+      session.attach({
+        send: () => {
+          throw new Error('socket closed');
+        },
+      }),
+    ).toThrow('socket closed');
+    expect(session.clientCount).toBe(0);
+  });
+
+  it('reports every departure: detach, failed transport and session exit', () => {
+    const { session, pty } = startSession();
+    const departed: unknown[] = [];
+    session.onClientDetached((client) => departed.push(client));
+    const detaching = recordingClient();
+    const staying = recordingClient();
+    let calls = 0;
+    const failing = {
+      send: () => {
+        if (++calls > 1) throw new Error('socket closed');
+      },
+    };
+    const attachment = session.attach(detaching);
+    session.attach(failing);
+    session.attach(staying);
+    attachment.detach();
+    attachment.detach();
+    pty.emitData('x');
+    expect(departed).toEqual([detaching, failing]);
+    pty.emitExit();
+    expect(departed).toEqual([detaching, failing, staying]);
+  });
+
   it('rejects attaching to an exited session', () => {
     const { session, pty } = startSession();
     pty.emitExit();
@@ -272,6 +324,28 @@ describe('terminate', () => {
     await done;
     expect(pty.kills).toEqual(['SIGHUP', 'SIGKILL']);
     expect(session.snapshot()).toMatchObject({ status: 'exited', exitSignal: 9 });
+  });
+
+  it('fails when the process survives SIGKILL, and can be retried', async () => {
+    const { session, pty } = startSession({ killTimeoutMs: 500, killGraceMs: 200 });
+    pty.exitOnSignals = new Set();
+    const first = session.terminate();
+    const second = session.terminate();
+    const outcomes = Promise.allSettled([first, second]);
+    await vi.advanceTimersByTimeAsync(700);
+    for (const outcome of await outcomes) {
+      expect(outcome).toMatchObject({
+        status: 'rejected',
+        reason: { code: 'SESSION_TERMINATION_FAILED' },
+      });
+    }
+    expect(session.status).toBe('terminating');
+
+    const retry = session.terminate();
+    expect(pty.kills).toEqual(['SIGHUP', 'SIGKILL', 'SIGHUP']);
+    pty.emitExit({ exitCode: 0, signal: 1 });
+    await expect(retry).resolves.toBeUndefined();
+    expect(session.status).toBe('exited');
   });
 
   it('does not escalate once the process has exited', async () => {
