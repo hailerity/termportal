@@ -74,6 +74,31 @@ describe('server with a real PTY', () => {
     expect(replay && replay.type === 'output' && replay.data).toContain('done-42');
   });
 
+  it('shares one session between clients: typing in A is visible in B', async () => {
+    const { createSession, connect } = await start();
+    const { id } = await createSession();
+    const a = await connect(id);
+    const b = await connect(id);
+    await Promise.all([a, b].map((c) => c.waitFor((m) => m.type === 'status')));
+
+    a.send({ type: 'input', data: 'echo from-a-$((1+1))\r' });
+    await Promise.all([a.waitForOutput(/from-a-2/), b.waitForOutput(/from-a-2/)]);
+    b.send({ type: 'input', data: 'echo from-b-$((2+2))\r' });
+    await Promise.all([a.waitForOutput(/from-b-4/), b.waitForOutput(/from-b-4/)]);
+
+    // One client vanishing abruptly must not disturb the other or the session.
+    a.ws.terminate();
+    b.send({ type: 'input', data: 'echo still-$((3+3))\r' });
+    await b.waitForOutput(/still-6/);
+
+    // The last resize wins for the single shared PTY (design §15).
+    const c = await connect(id);
+    b.send({ type: 'resize', cols: 90, rows: 20 });
+    c.send({ type: 'resize', cols: 110, rows: 35 });
+    c.send({ type: 'input', data: 'stty size\r' });
+    await Promise.all([b.waitForOutput(/35 110/), c.waitForOutput(/35 110/)]);
+  });
+
   it('reflects a shell that exits by itself', async () => {
     const { http, createSession, connect } = await start();
     const { id } = await createSession();
