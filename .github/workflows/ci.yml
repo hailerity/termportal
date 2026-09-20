@@ -11,6 +11,8 @@ concurrency:
 
 permissions:
   contents: read
+  # nx-set-shas looks up the last successful run on main.
+  actions: read
 
 jobs:
   verify:

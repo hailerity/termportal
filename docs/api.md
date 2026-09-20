@@ -158,7 +158,10 @@ running is answered with `SESSION_ALREADY_EXITED`.
 | `4400` | invalid session id                                             | no         |
 | `4404` | session not found                                              | no         |
 | `4409` | session already exited                                         | no         |
-| `4429` | session already has `MAX_CLIENTS_PER_SESSION` clients | later |
+| `4429` | session already has `MAX_CLIENTS_PER_SESSION` clients | no\* |
+
+\* The limit is transient, but a full session cannot be joined by retrying right away: treat
+`4429` like the other `4xxx` codes and let the user retry once another client has left.
 
 Closing the socket never terminates the session; only `DELETE` or the shell exiting does.
 The server pings every 30 s and drops peers that stop answering.
