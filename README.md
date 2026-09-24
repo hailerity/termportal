@@ -32,21 +32,21 @@ there; macOS uses a prebuild).
 
 ```bash
 npm install
-npx nx serve server   # API on http://127.0.0.1:3000
-npx nx serve web      # client on http://localhost:4200
+npx nx serve server   # API on http://127.0.0.1:24001
+npx nx serve web      # client on http://localhost:24002
 ```
 
-Open <http://localhost:4200>, press **+ New**, and type. Open the same URL (it carries the
+Open <http://localhost:24002>, press **+ New**, and type. Open the same URL (it carries the
 session id in its hash) in a second tab to share the session, or refresh to see replay.
 
 With curl:
 
 ```bash
-curl -X POST localhost:3000/api/v1/sessions -H 'content-type: application/json' \
+curl -X POST localhost:24001/api/v1/sessions -H 'content-type: application/json' \
      -d '{"shell":"bash","cols":120,"rows":40}'
-curl localhost:3000/api/v1/sessions
-curl localhost:3000/api/v1/sessions/<id>
-curl -X DELETE localhost:3000/api/v1/sessions/<id>
+curl localhost:24001/api/v1/sessions
+curl localhost:24001/api/v1/sessions/<id>
+curl -X DELETE localhost:24001/api/v1/sessions/<id>
 ```
 
 ## Repository layout

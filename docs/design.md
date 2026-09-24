@@ -997,7 +997,7 @@ Environment variables:
 
 ```text
 HOST=127.0.0.1
-PORT=3000
+PORT=24001
 
 DEFAULT_SHELL=bash
 DEFAULT_CWD=/tmp

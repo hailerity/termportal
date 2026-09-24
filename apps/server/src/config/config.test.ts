@@ -5,7 +5,7 @@ describe('loadConfig', () => {
   it('uses the documented defaults', () => {
     expect(loadConfig({})).toEqual({
       host: '127.0.0.1',
-      port: 3000,
+      port: 24001,
       defaultShell: undefined,
       defaultCwd: '/tmp',
       defaultCols: 120,
@@ -15,7 +15,7 @@ describe('loadConfig', () => {
       maxSessions: 100,
       maxClientsPerSession: 32,
       exitedSessionTtlMs: 300000,
-      allowedOrigins: ['http://localhost:4200', 'http://127.0.0.1:4200'],
+      allowedOrigins: ['http://localhost:24002', 'http://127.0.0.1:24002'],
       logLevel: 'info',
     });
   });

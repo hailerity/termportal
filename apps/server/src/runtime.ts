@@ -44,7 +44,7 @@ export function maxBufferedBytesFor(outputBufferBytes: number): number {
 }
 
 /**
- * The server's environment minus its own configuration. A shell that inherited `PORT=3000`
+ * The server's environment minus its own configuration. A shell that inherited `PORT=24001`
  * would, for example, make every dev server started inside the terminal fight for that port.
  * `HOST` and `LOG_LEVEL` are left alone: they are generic names that tools run inside the
  * terminal may legitimately expect, and inheriting them is harmless.

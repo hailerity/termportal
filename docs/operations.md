@@ -8,7 +8,7 @@ startup with a message naming the variable.
 | Variable                  | Default                                        | Meaning                                                             |
 | ------------------------- | ---------------------------------------------- | ------------------------------------------------------------------- |
 | `HOST`                    | `127.0.0.1`                                    | bind address                                                        |
-| `PORT`                    | `3000`                                         | bind port (`0` = ephemeral)                                         |
+| `PORT`                    | `24001`                                        | bind port (`0` = ephemeral)                                         |
 | `DEFAULT_SHELL`           | `zsh` on macOS, `bash` elsewhere               | `bash`, `zsh` or `sh`; must be installed                            |
 | `DEFAULT_CWD`             | `/tmp`                                         | working directory when a request names none                         |
 | `DEFAULT_COLS` / `_ROWS`  | `120` / `40`                                   | initial PTY size                                                    |
@@ -17,7 +17,7 @@ startup with a message naming the variable.
 | `MAX_CLIENTS_PER_SESSION` | `32`                                           | WebSocket clients attached to one session                           |
 | `EXITED_SESSION_TTL_MS`   | `300000`                                       | how long an exited session stays listed                             |
 | `SHUTDOWN_TIMEOUT_MS`     | `10000`                                        | grace period before PTYs are force-killed on shutdown               |
-| `ALLOWED_ORIGINS`         | `http://localhost:4200,http://127.0.0.1:4200`  | comma-separated browser origins; `*` disables the check             |
+| `ALLOWED_ORIGINS`         | `http://localhost:24002,http://127.0.0.1:24002`| comma-separated browser origins; `*` disables the check             |
 | `LOG_LEVEL`               | `info`                                         | pino level, or `silent`                                             |
 
 Memory: budget roughly `MAX_SESSIONS × OUTPUT_BUFFER_BYTES` for replay buffers, plus up to
@@ -98,7 +98,7 @@ and `nx` in `package.json`; after upgrading one of them run `npm approve-scripts
 `make` and a C++ compiler (`build-essential`).
 
 **The browser shows "Origin is not allowed" or the terminal never connects.** The page's
-origin is not in `ALLOWED_ORIGINS`. `http://localhost:4200` and `http://127.0.0.1:4200` are
+origin is not in `ALLOWED_ORIGINS`. `http://localhost:24002` and `http://127.0.0.1:24002` are
 different origins. Check the server log for `websocket origin rejected`.
 
 **`INVALID_SHELL` for `bash` or `zsh`.** The shell is not installed at a known location; the

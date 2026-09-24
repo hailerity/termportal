@@ -11,7 +11,7 @@ const list = z.string().transform((value) =>
 
 const envSchema = z.object({
   HOST: z.string().min(1).default('127.0.0.1'),
-  PORT: integer(0, 65535).default(3000),
+  PORT: integer(0, 65535).default(24001),
   DEFAULT_SHELL: z.enum(['bash', 'zsh', 'sh']).optional(),
   DEFAULT_CWD: z.string().min(1).default('/tmp'),
   DEFAULT_COLS: integer(2, 1000).default(120),
@@ -22,7 +22,7 @@ const envSchema = z.object({
   MAX_CLIENTS_PER_SESSION: integer(1, 1000).default(32),
   EXITED_SESSION_TTL_MS: integer(0, 86_400_000).default(5 * 60 * 1000),
   /** Browser origins allowed to call the API and open terminal WebSockets. */
-  ALLOWED_ORIGINS: list.default(['http://localhost:4200', 'http://127.0.0.1:4200']),
+  ALLOWED_ORIGINS: list.default(['http://localhost:24002', 'http://127.0.0.1:24002']),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
 });
 
