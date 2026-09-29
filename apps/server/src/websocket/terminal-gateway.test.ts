@@ -13,7 +13,11 @@ let gateway: TerminalGateway;
 let harness: ReturnType<typeof createFakeSessions>;
 let baseUrl: string;
 const clients: TestTerminalClient[] = [];
-const REPLAY_BYTES = 256 * 1024;
+// Large enough that its ~12 MiB wire frame cannot be absorbed by a kernel send buffer in one
+// write on any platform (Linux loopback takes several MiB synchronously); otherwise the replay
+// tests below would only pass where socket buffers happen to be small, such as macOS.
+const REPLAY_BYTES = 2 * 1024 * 1024;
+const REPLAY_TEST_TIMEOUT_MS = 30_000;
 
 /** Runs on every attach; lets a test make the PTY print in the same tick as the replay. */
 let onAttached: (() => void) | undefined;
@@ -308,16 +312,24 @@ describe('lifecycle', () => {
       return connect(id);
     }
 
-    it('drops the fresh client when the queue limit ignores the replay size', async () => {
-      const client = await attachToBusySession(REPLAY_BYTES);
-      expect((await client.closed).code).toBe(CLOSE_CODES.tryAgainLater);
-    });
+    it(
+      'drops the fresh client when the queue limit ignores the replay size',
+      async () => {
+        const client = await attachToBusySession(REPLAY_BYTES);
+        expect((await client.closed).code).toBe(CLOSE_CODES.tryAgainLater);
+      },
+      REPLAY_TEST_TIMEOUT_MS,
+    );
 
-    it('keeps the client when the limit is derived from the replay size', async () => {
-      const client = await attachToBusySession(maxBufferedBytesFor(REPLAY_BYTES));
-      await client.waitForOutput(/live-output/);
-      expect(client.output).toHaveLength(REPLAY_BYTES + 'live-output'.length);
-    });
+    it(
+      'keeps the client when the limit is derived from the replay size',
+      async () => {
+        const client = await attachToBusySession(maxBufferedBytesFor(REPLAY_BYTES));
+        await client.waitForOutput(/live-output/, REPLAY_TEST_TIMEOUT_MS);
+        expect(client.output).toHaveLength(REPLAY_BYTES + 'live-output'.length);
+      },
+      REPLAY_TEST_TIMEOUT_MS,
+    );
   });
 
   it('sizes the queue limit to hold a worst-case replay frame', () => {
